@@ -19,5 +19,6 @@ jobs:
         with:
           token: ${{ github.token }}
           owner: router-for-me
+          repo: CLIProxyAPIPlus
           base: main
           head: main
