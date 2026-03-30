@@ -16,14 +16,15 @@ import (
 )
 
 type usageReporter struct {
-	provider    string
-	model       string
-	authID      string
-	authIndex   string
-	apiKey      string
-	source      string
-	requestedAt time.Time
-	once        sync.Once
+	provider       string
+	model          string
+	authID         string
+	authIndex      string
+	apiKey         string
+	source         string
+	thinkingEffort string
+	requestedAt    time.Time
+	once           sync.Once
 }
 
 func newUsageReporter(ctx context.Context, provider, model string, auth *cliproxyauth.Auth) *usageReporter {
@@ -63,6 +64,7 @@ func (r *usageReporter) publishWithOutcome(ctx context.Context, detail usage.Det
 	if r == nil {
 		return
 	}
+	r.captureThinkingEffort(ctx)
 	if detail.TotalTokens == 0 {
 		total := detail.InputTokens + detail.OutputTokens + detail.ReasoningTokens
 		if total > 0 {
@@ -85,6 +87,7 @@ func (r *usageReporter) ensurePublished(ctx context.Context) {
 	if r == nil {
 		return
 	}
+	r.captureThinkingEffort(ctx)
 	r.once.Do(func() {
 		usage.PublishRecord(ctx, r.buildRecord(usage.Detail{}, false))
 	})
@@ -95,17 +98,25 @@ func (r *usageReporter) buildRecord(detail usage.Detail, failed bool) usage.Reco
 		return usage.Record{Detail: detail, Failed: failed}
 	}
 	return usage.Record{
-		Provider:    r.provider,
-		Model:       r.model,
-		Source:      r.source,
-		APIKey:      r.apiKey,
-		AuthID:      r.authID,
-		AuthIndex:   r.authIndex,
-		RequestedAt: r.requestedAt,
-		Latency:     r.latency(),
-		Failed:      failed,
-		Detail:      detail,
+		Provider:       r.provider,
+		Model:          r.model,
+		Source:         r.source,
+		APIKey:         r.apiKey,
+		AuthID:         r.authID,
+		AuthIndex:      r.authIndex,
+		ThinkingEffort: r.thinkingEffort,
+		RequestedAt:    r.requestedAt,
+		Latency:        r.latency(),
+		Failed:         failed,
+		Detail:         detail,
 	}
+}
+
+func (r *usageReporter) captureThinkingEffort(ctx context.Context) {
+	if r == nil || r.thinkingEffort != "" {
+		return
+	}
+	r.thinkingEffort = resolveUsageThinkingEffort(ctx)
 }
 
 func (r *usageReporter) latency() time.Duration {
@@ -138,6 +149,28 @@ func apiKeyFromContext(ctx context.Context) string {
 		}
 	}
 	return ""
+}
+
+func resolveUsageThinkingEffort(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	ginCtx, ok := ctx.Value("gin").(*gin.Context)
+	if !ok || ginCtx == nil {
+		return ""
+	}
+	value, exists := ginCtx.Get(usageThinkingEffortKey)
+	if !exists {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case fmt.Stringer:
+		return strings.TrimSpace(typed.String())
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", typed))
+	}
 }
 
 func resolveUsageSource(auth *cliproxyauth.Auth, ctxAPIKey string) string {

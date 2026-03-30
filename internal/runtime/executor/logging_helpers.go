@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	apiAttemptsKey = "API_UPSTREAM_ATTEMPTS"
-	apiRequestKey  = "API_REQUEST"
-	apiResponseKey = "API_RESPONSE"
+	apiAttemptsKey         = "API_UPSTREAM_ATTEMPTS"
+	apiRequestKey          = "API_REQUEST"
+	apiResponseKey         = "API_RESPONSE"
+	usageThinkingEffortKey = "USAGE_THINKING_EFFORT"
 )
 
 // upstreamRequestLog captures the outbound upstream request details for logging.
@@ -51,11 +52,13 @@ type upstreamAttempt struct {
 
 // recordAPIRequest stores the upstream request metadata in Gin context for request logging.
 func recordAPIRequest(ctx context.Context, cfg *config.Config, info upstreamRequestLog) {
-	if cfg == nil || !cfg.RequestLog {
-		return
-	}
 	ginCtx := ginContextFrom(ctx)
 	if ginCtx == nil {
+		return
+	}
+	ginCtx.Set(usageThinkingEffortKey, extractThinkingEffort(info.Body))
+
+	if cfg == nil || !cfg.RequestLog {
 		return
 	}
 
@@ -257,6 +260,101 @@ func updateAggregatedResponse(ginCtx *gin.Context, attempts []*upstreamAttempt) 
 		}
 	}
 	ginCtx.Set(apiResponseKey, []byte(builder.String()))
+}
+
+func extractThinkingEffort(body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+
+	if effort := firstJSONString(body,
+		"reasoning.effort",
+		"reasoning_effort",
+		"output_config.effort",
+		"generationConfig.thinkingConfig.thinkingLevel",
+		"generationConfig.thinkingConfig.thinking_level",
+		"request.generationConfig.thinkingConfig.thinkingLevel",
+		"request.generationConfig.thinkingConfig.thinking_level",
+	); effort != "" {
+		return effort
+	}
+
+	if budget, ok := firstJSONInt(body,
+		"thinking.budget_tokens",
+		"generationConfig.thinkingConfig.thinkingBudget",
+		"generationConfig.thinkingConfig.thinking_budget",
+		"request.generationConfig.thinkingConfig.thinkingBudget",
+		"request.generationConfig.thinkingConfig.thinking_budget",
+	); ok {
+		switch {
+		case budget == 0:
+			return "none"
+		case budget < 0:
+			return "auto"
+		default:
+			return fmt.Sprintf("budget:%d", budget)
+		}
+	}
+
+	switch thinkingType := firstJSONString(body, "thinking.type"); thinkingType {
+	case "disabled":
+		return "none"
+	case "adaptive", "auto":
+		return "auto"
+	case "enabled":
+		return "enabled"
+	}
+
+	if enabled, ok := firstJSONBool(body,
+		"chat_template_kwargs.enable_thinking",
+		"reasoning_split",
+	); ok {
+		if enabled {
+			return "enabled"
+		}
+		return "none"
+	}
+
+	return ""
+}
+
+func firstJSONString(body []byte, paths ...string) string {
+	for _, path := range paths {
+		value := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, path).String()))
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstJSONInt(body []byte, paths ...string) (int64, bool) {
+	for _, path := range paths {
+		value := gjson.GetBytes(body, path)
+		if !value.Exists() {
+			continue
+		}
+		switch value.Type {
+		case gjson.Number, gjson.String, gjson.True, gjson.False:
+			return value.Int(), true
+		}
+	}
+	return 0, false
+}
+
+func firstJSONBool(body []byte, paths ...string) (bool, bool) {
+	for _, path := range paths {
+		value := gjson.GetBytes(body, path)
+		if !value.Exists() {
+			continue
+		}
+		switch value.Type {
+		case gjson.True, gjson.False, gjson.String:
+			return value.Bool(), true
+		}
+	}
+	return false, false
 }
 
 func writeHeaders(builder *strings.Builder, headers http.Header) {

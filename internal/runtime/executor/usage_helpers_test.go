@@ -1,9 +1,13 @@
 package executor
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 )
 
@@ -60,5 +64,27 @@ func TestUsageReporterBuildRecordIncludesLatency(t *testing.T) {
 	}
 	if record.Latency > 3*time.Second {
 		t.Fatalf("latency = %v, want <= 3s", record.Latency)
+	}
+}
+
+func TestUsageReporterBuildRecordIncludesThinkingEffortFromContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	ginCtx, _ := gin.CreateTestContext(recorder)
+	ginCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ginCtx.Set(usageThinkingEffortKey, "high")
+
+	ctx := context.WithValue(context.Background(), "gin", ginCtx)
+
+	reporter := &usageReporter{
+		provider: "codex",
+		model:    "gpt-5.4",
+	}
+	reporter.captureThinkingEffort(ctx)
+
+	record := reporter.buildRecord(usage.Detail{TotalTokens: 3}, false)
+	if record.ThinkingEffort != "high" {
+		t.Fatalf("thinking effort = %q, want %q", record.ThinkingEffort, "high")
 	}
 }

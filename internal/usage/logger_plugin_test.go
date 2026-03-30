@@ -139,3 +139,91 @@ func TestRequestStatisticsRecordIncludesRequestMetadata(t *testing.T) {
 		t.Fatalf("endpoint = %q, want %q", details[0].Endpoint, "GET /v1/responses")
 	}
 }
+
+func TestRequestStatisticsRecordIncludesThinkingEffort(t *testing.T) {
+	stats := NewRequestStatistics()
+	stats.Record(context.Background(), coreusage.Record{
+		APIKey:         "test-key",
+		Model:          "gpt-5.4",
+		ThinkingEffort: "high",
+		RequestedAt:    time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
+		Detail: coreusage.Detail{
+			InputTokens:  10,
+			OutputTokens: 20,
+			TotalTokens:  30,
+		},
+	})
+
+	snapshot := stats.Snapshot()
+	details := snapshot.APIs["test-key"].Models["gpt-5.4"].Details
+	if len(details) != 1 {
+		t.Fatalf("details len = %d, want 1", len(details))
+	}
+	if details[0].ThinkingEffort != "high" {
+		t.Fatalf("thinking_effort = %q, want %q", details[0].ThinkingEffort, "high")
+	}
+}
+
+func TestRequestStatisticsMergeSnapshotDedupSeparatesThinkingEffort(t *testing.T) {
+	stats := NewRequestStatistics()
+	timestamp := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+
+	first := StatisticsSnapshot{
+		APIs: map[string]APISnapshot{
+			"test-key": {
+				Models: map[string]ModelSnapshot{
+					"gpt-5.4": {
+						Details: []RequestDetail{{
+							Timestamp:      timestamp,
+							ThinkingEffort: "low",
+							Source:         "user@example.com",
+							AuthIndex:      "0",
+							Tokens: TokenStats{
+								InputTokens:  10,
+								OutputTokens: 20,
+								TotalTokens:  30,
+							},
+						}},
+					},
+				},
+			},
+		},
+	}
+	second := StatisticsSnapshot{
+		APIs: map[string]APISnapshot{
+			"test-key": {
+				Models: map[string]ModelSnapshot{
+					"gpt-5.4": {
+						Details: []RequestDetail{{
+							Timestamp:      timestamp,
+							ThinkingEffort: "high",
+							Source:         "user@example.com",
+							AuthIndex:      "0",
+							Tokens: TokenStats{
+								InputTokens:  10,
+								OutputTokens: 20,
+								TotalTokens:  30,
+							},
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	result := stats.MergeSnapshot(first)
+	if result.Added != 1 || result.Skipped != 0 {
+		t.Fatalf("first merge = %+v, want added=1 skipped=0", result)
+	}
+
+	result = stats.MergeSnapshot(second)
+	if result.Added != 1 || result.Skipped != 0 {
+		t.Fatalf("second merge = %+v, want added=1 skipped=0", result)
+	}
+
+	snapshot := stats.Snapshot()
+	details := snapshot.APIs["test-key"].Models["gpt-5.4"].Details
+	if len(details) != 2 {
+		t.Fatalf("details len = %d, want 2", len(details))
+	}
+}

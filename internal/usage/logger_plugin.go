@@ -90,16 +90,17 @@ type modelStats struct {
 
 // RequestDetail stores the timestamp, latency, and token usage for a single request.
 type RequestDetail struct {
-	Timestamp time.Time  `json:"timestamp"`
-	LatencyMs int64      `json:"latency_ms"`
-	RequestID string     `json:"request_id,omitempty"`
-	Method    string     `json:"method,omitempty"`
-	Path      string     `json:"path,omitempty"`
-	Endpoint  string     `json:"endpoint,omitempty"`
-	Source    string     `json:"source"`
-	AuthIndex string     `json:"auth_index"`
-	Tokens    TokenStats `json:"tokens"`
-	Failed    bool       `json:"failed"`
+	Timestamp      time.Time  `json:"timestamp"`
+	LatencyMs      int64      `json:"latency_ms"`
+	RequestID      string     `json:"request_id,omitempty"`
+	Method         string     `json:"method,omitempty"`
+	Path           string     `json:"path,omitempty"`
+	Endpoint       string     `json:"endpoint,omitempty"`
+	Source         string     `json:"source"`
+	AuthIndex      string     `json:"auth_index"`
+	ThinkingEffort string     `json:"thinking_effort,omitempty"`
+	Tokens         TokenStats `json:"tokens"`
+	Failed         bool       `json:"failed"`
 }
 
 // TokenStats captures the token usage breakdown for a request.
@@ -207,16 +208,17 @@ func (s *RequestStatistics) Record(ctx context.Context, record coreusage.Record)
 		s.apis[statsKey] = stats
 	}
 	s.updateAPIStats(stats, modelName, RequestDetail{
-		Timestamp: timestamp,
-		LatencyMs: normaliseLatency(record.Latency),
-		RequestID: requestMeta.RequestID,
-		Method:    requestMeta.Method,
-		Path:      requestMeta.Path,
-		Endpoint:  requestMeta.Endpoint,
-		Source:    record.Source,
-		AuthIndex: record.AuthIndex,
-		Tokens:    detail,
-		Failed:    failed,
+		Timestamp:      timestamp,
+		LatencyMs:      normaliseLatency(record.Latency),
+		RequestID:      requestMeta.RequestID,
+		Method:         requestMeta.Method,
+		Path:           requestMeta.Path,
+		Endpoint:       requestMeta.Endpoint,
+		Source:         record.Source,
+		AuthIndex:      record.AuthIndex,
+		ThinkingEffort: normaliseThinkingEffort(record.ThinkingEffort),
+		Tokens:         detail,
+		Failed:         failed,
 	})
 
 	s.requestsByDay[dayKey]++
@@ -398,7 +400,7 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 	timestamp := detail.Timestamp.UTC().Format(time.RFC3339Nano)
 	tokens := normaliseTokenStats(detail.Tokens)
 	return fmt.Sprintf(
-		"%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
+		"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
 		apiName,
 		modelName,
 		timestamp,
@@ -408,6 +410,7 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 		detail.Endpoint,
 		detail.Source,
 		detail.AuthIndex,
+		detail.ThinkingEffort,
 		detail.Failed,
 		tokens.InputTokens,
 		tokens.OutputTokens,
@@ -517,6 +520,7 @@ func normaliseRequestDetail(detail RequestDetail) RequestDetail {
 	detail.Method = strings.ToUpper(strings.TrimSpace(detail.Method))
 	detail.Path = strings.TrimSpace(detail.Path)
 	detail.Endpoint = strings.TrimSpace(detail.Endpoint)
+	detail.ThinkingEffort = normaliseThinkingEffort(detail.ThinkingEffort)
 	if detail.Endpoint == "" {
 		if detail.Method != "" && detail.Path != "" {
 			detail.Endpoint = detail.Method + " " + detail.Path
@@ -525,6 +529,10 @@ func normaliseRequestDetail(detail RequestDetail) RequestDetail {
 		}
 	}
 	return detail
+}
+
+func normaliseThinkingEffort(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func normaliseLatency(latency time.Duration) int64 {
