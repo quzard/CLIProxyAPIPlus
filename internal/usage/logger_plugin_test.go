@@ -2,9 +2,13 @@ package usage
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/logging"
 	coreusage "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 )
 
@@ -92,5 +96,46 @@ func TestRequestStatisticsMergeSnapshotDedupIgnoresLatency(t *testing.T) {
 	details := snapshot.APIs["test-key"].Models["gpt-5.4"].Details
 	if len(details) != 1 {
 		t.Fatalf("details len = %d, want 1", len(details))
+	}
+}
+
+func TestRequestStatisticsRecordIncludesRequestMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	ginCtx, _ := gin.CreateTestContext(recorder)
+	ginCtx.Request = httptest.NewRequest(http.MethodGet, "/v1/responses?trace=1", nil)
+	logging.SetGinRequestID(ginCtx, "deadbeef")
+
+	ctx := context.WithValue(context.Background(), "gin", ginCtx)
+
+	stats := NewRequestStatistics()
+	stats.Record(ctx, coreusage.Record{
+		APIKey:      "test-key",
+		Model:       "gpt-5.4",
+		RequestedAt: time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
+		Detail: coreusage.Detail{
+			InputTokens:  1,
+			OutputTokens: 2,
+			TotalTokens:  3,
+		},
+	})
+
+	snapshot := stats.Snapshot()
+	details := snapshot.APIs["test-key"].Models["gpt-5.4"].Details
+	if len(details) != 1 {
+		t.Fatalf("details len = %d, want 1", len(details))
+	}
+	if details[0].RequestID != "deadbeef" {
+		t.Fatalf("request_id = %q, want %q", details[0].RequestID, "deadbeef")
+	}
+	if details[0].Method != http.MethodGet {
+		t.Fatalf("method = %q, want %q", details[0].Method, http.MethodGet)
+	}
+	if details[0].Path != "/v1/responses" {
+		t.Fatalf("path = %q, want %q", details[0].Path, "/v1/responses")
+	}
+	if details[0].Endpoint != "GET /v1/responses" {
+		t.Fatalf("endpoint = %q, want %q", details[0].Endpoint, "GET /v1/responses")
 	}
 }

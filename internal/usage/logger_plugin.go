@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/logging"
 	coreusage "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 )
 
@@ -91,6 +92,10 @@ type modelStats struct {
 type RequestDetail struct {
 	Timestamp time.Time  `json:"timestamp"`
 	LatencyMs int64      `json:"latency_ms"`
+	RequestID string     `json:"request_id,omitempty"`
+	Method    string     `json:"method,omitempty"`
+	Path      string     `json:"path,omitempty"`
+	Endpoint  string     `json:"endpoint,omitempty"`
 	Source    string     `json:"source"`
 	AuthIndex string     `json:"auth_index"`
 	Tokens    TokenStats `json:"tokens"`
@@ -163,11 +168,15 @@ func (s *RequestStatistics) Record(ctx context.Context, record coreusage.Record)
 	if timestamp.IsZero() {
 		timestamp = time.Now()
 	}
+	requestMeta := resolveRequestMetadata(ctx)
 	detail := normaliseDetail(record.Detail)
 	totalTokens := detail.TotalTokens
 	statsKey := record.APIKey
 	if statsKey == "" {
-		statsKey = resolveAPIIdentifier(ctx, record)
+		statsKey = requestMeta.Endpoint
+		if statsKey == "" {
+			statsKey = resolveAPIIdentifier(ctx, record)
+		}
 	}
 	failed := record.Failed
 	if !failed {
@@ -200,6 +209,10 @@ func (s *RequestStatistics) Record(ctx context.Context, record coreusage.Record)
 	s.updateAPIStats(stats, modelName, RequestDetail{
 		Timestamp: timestamp,
 		LatencyMs: normaliseLatency(record.Latency),
+		RequestID: requestMeta.RequestID,
+		Method:    requestMeta.Method,
+		Path:      requestMeta.Path,
+		Endpoint:  requestMeta.Endpoint,
 		Source:    record.Source,
 		AuthIndex: record.AuthIndex,
 		Tokens:    detail,
@@ -334,6 +347,7 @@ func (s *RequestStatistics) MergeSnapshot(snapshot StatisticsSnapshot) MergeResu
 			}
 			for _, detail := range modelSnapshot.Details {
 				detail.Tokens = normaliseTokenStats(detail.Tokens)
+				detail = normaliseRequestDetail(detail)
 				if detail.LatencyMs < 0 {
 					detail.LatencyMs = 0
 				}
@@ -384,10 +398,14 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 	timestamp := detail.Timestamp.UTC().Format(time.RFC3339Nano)
 	tokens := normaliseTokenStats(detail.Tokens)
 	return fmt.Sprintf(
-		"%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
+		"%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
 		apiName,
 		modelName,
 		timestamp,
+		detail.RequestID,
+		detail.Method,
+		detail.Path,
+		detail.Endpoint,
 		detail.Source,
 		detail.AuthIndex,
 		detail.Failed,
@@ -400,28 +418,54 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 }
 
 func resolveAPIIdentifier(ctx context.Context, record coreusage.Record) string {
-	if ctx != nil {
-		if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil {
-			path := ginCtx.FullPath()
-			if path == "" && ginCtx.Request != nil {
-				path = ginCtx.Request.URL.Path
-			}
-			method := ""
-			if ginCtx.Request != nil {
-				method = ginCtx.Request.Method
-			}
-			if path != "" {
-				if method != "" {
-					return method + " " + path
-				}
-				return path
-			}
-		}
+	if meta := resolveRequestMetadata(ctx); meta.Endpoint != "" {
+		return meta.Endpoint
 	}
 	if record.Provider != "" {
 		return record.Provider
 	}
 	return "unknown"
+}
+
+type requestMetadata struct {
+	RequestID string
+	Method    string
+	Path      string
+	Endpoint  string
+}
+
+func resolveRequestMetadata(ctx context.Context) requestMetadata {
+	meta := requestMetadata{}
+	if ctx == nil {
+		return meta
+	}
+	ginCtx, ok := ctx.Value("gin").(*gin.Context)
+	if !ok || ginCtx == nil {
+		return meta
+	}
+
+	meta.RequestID = strings.TrimSpace(logging.GetGinRequestID(ginCtx))
+	if meta.RequestID == "" && ginCtx.Request != nil {
+		meta.RequestID = strings.TrimSpace(logging.GetRequestID(ginCtx.Request.Context()))
+	}
+
+	if ginCtx.Request != nil {
+		meta.Method = strings.ToUpper(strings.TrimSpace(ginCtx.Request.Method))
+	}
+
+	path := strings.TrimSpace(ginCtx.FullPath())
+	if path == "" && ginCtx.Request != nil && ginCtx.Request.URL != nil {
+		path = strings.TrimSpace(ginCtx.Request.URL.Path)
+	}
+	meta.Path = path
+
+	if meta.Method != "" && meta.Path != "" {
+		meta.Endpoint = meta.Method + " " + meta.Path
+	} else if meta.Path != "" {
+		meta.Endpoint = meta.Path
+	}
+
+	return meta
 }
 
 func resolveSuccess(ctx context.Context) bool {
@@ -466,6 +510,21 @@ func normaliseTokenStats(tokens TokenStats) TokenStats {
 		tokens.TotalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens + tokens.CachedTokens
 	}
 	return tokens
+}
+
+func normaliseRequestDetail(detail RequestDetail) RequestDetail {
+	detail.RequestID = strings.TrimSpace(detail.RequestID)
+	detail.Method = strings.ToUpper(strings.TrimSpace(detail.Method))
+	detail.Path = strings.TrimSpace(detail.Path)
+	detail.Endpoint = strings.TrimSpace(detail.Endpoint)
+	if detail.Endpoint == "" {
+		if detail.Method != "" && detail.Path != "" {
+			detail.Endpoint = detail.Method + " " + detail.Path
+		} else if detail.Path != "" {
+			detail.Endpoint = detail.Path
+		}
+	}
+	return detail
 }
 
 func normaliseLatency(latency time.Duration) int64 {
