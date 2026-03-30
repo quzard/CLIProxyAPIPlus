@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -20,8 +21,9 @@ import (
 )
 
 const (
-	DefaultPanelGitHubRepository = "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-	DefaultPprofAddr             = "127.0.0.1:8316"
+	DefaultPanelGitHubRepository      = "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+	DefaultPanelUpdateIntervalMinutes = 10
+	DefaultPprofAddr                  = "127.0.0.1:8316"
 )
 
 // Config represents the application's configuration, loaded from a YAML file.
@@ -198,6 +200,9 @@ type RemoteManagement struct {
 	// DisableAutoUpdatePanel disables automatic periodic background updates of the management panel asset from GitHub.
 	// When false (the default), the background updater remains enabled; when true, the panel is only downloaded on first access if missing.
 	DisableAutoUpdatePanel bool `yaml:"disable-auto-update-panel"`
+	// PanelUpdateIntervalMinutes controls how often the background updater checks GitHub for a newer management panel asset.
+	// Values less than or equal to 0 fall back to the default interval.
+	PanelUpdateIntervalMinutes int `yaml:"panel-update-interval-minutes"`
 	// PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.
 	// Accepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.
 	PanelGitHubRepository string `yaml:"panel-github-repository"`
@@ -635,6 +640,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	cfg.Pprof.Addr = DefaultPprofAddr
 	cfg.AmpCode.RestrictManagementToLocalhost = false // Default to false: API key auth is sufficient
 	cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
+	cfg.RemoteManagement.PanelUpdateIntervalMinutes = DefaultPanelUpdateIntervalMinutes
 	cfg.IncognitoBrowser = false // Default to normal browser (AWS uses incognito by force)
 	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		if optional {
@@ -677,6 +683,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	cfg.RemoteManagement.PanelGitHubRepository = strings.TrimSpace(cfg.RemoteManagement.PanelGitHubRepository)
 	if cfg.RemoteManagement.PanelGitHubRepository == "" {
 		cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
+	}
+	if cfg.RemoteManagement.PanelUpdateIntervalMinutes <= 0 {
+		cfg.RemoteManagement.PanelUpdateIntervalMinutes = DefaultPanelUpdateIntervalMinutes
 	}
 
 	cfg.Pprof.Addr = strings.TrimSpace(cfg.Pprof.Addr)
@@ -1425,6 +1434,8 @@ func isKnownDefaultValue(path []string, node *yaml.Node) bool {
 		switch fullPath {
 		case "error-logs-max-files":
 			return node.Value == "10"
+		case "remote-management.panel-update-interval-minutes":
+			return node.Value == strconv.Itoa(DefaultPanelUpdateIntervalMinutes)
 		}
 	}
 

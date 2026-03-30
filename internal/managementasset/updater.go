@@ -30,7 +30,6 @@ const (
 	managementAssetName          = "management.html"
 	httpUserAgent                = "CLIProxyAPI-management-updater"
 	managementSyncMinInterval    = 30 * time.Second
-	updateCheckInterval          = 3 * time.Hour
 	maxAssetDownloadSize         = 50 << 20 // 10 MB safety limit for management asset downloads
 )
 
@@ -76,9 +75,6 @@ func runAutoUpdater(ctx context.Context) {
 		ctx = context.Background()
 	}
 
-	ticker := time.NewTicker(updateCheckInterval)
-	defer ticker.Stop()
-
 	runOnce := func() {
 		cfg := currentConfigPtr.Load()
 		if cfg == nil {
@@ -102,13 +98,28 @@ func runAutoUpdater(ctx context.Context) {
 	runOnce()
 
 	for {
+		timer := time.NewTimer(autoUpdateInterval(currentConfigPtr.Load()))
 		select {
 		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			runOnce()
 		}
 	}
+}
+
+func autoUpdateInterval(cfg *config.Config) time.Duration {
+	minutes := config.DefaultPanelUpdateIntervalMinutes
+	if cfg != nil && cfg.RemoteManagement.PanelUpdateIntervalMinutes > 0 {
+		minutes = cfg.RemoteManagement.PanelUpdateIntervalMinutes
+	}
+	return time.Duration(minutes) * time.Minute
 }
 
 func newHTTPClient(proxyURL string) *http.Client {
