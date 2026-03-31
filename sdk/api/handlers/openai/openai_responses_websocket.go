@@ -277,6 +277,15 @@ func normalizeResponseSubsequentRequest(rawJSON []byte, lastRequest []byte, last
 		}
 	}
 
+	// Ensure every function_call in lastResponseOutput has a matching
+	// function_call_output in nextInput. When tool execution is interrupted
+	// (e.g. Ctrl+C), the client may omit these, causing upstream errors:
+	// "No tool output found for function call".
+	if augmented := ensureFunctionCallOutputs(lastResponseOutput, nextInput.Raw); augmented != nextInput.Raw {
+		rawJSON, _ = sjson.SetRawBytes(rawJSON, "input", []byte(augmented))
+		nextInput = gjson.GetBytes(rawJSON, "input")
+	}
+
 	// Websocket v2 mode uses response.create with previous_response_id + incremental input.
 	// Do not expand it into a full input transcript; upstream expects the incremental payload.
 	if allowIncrementalInputWithPreviousResponseID {
@@ -615,6 +624,68 @@ func normalizeJSONArrayRaw(raw []byte) string {
 		return trimmed
 	}
 	return "[]"
+}
+
+// ensureFunctionCallOutputs checks that every function_call in lastResponseOutput
+// has a matching function_call_output in nextInputRaw. For any unmatched call,
+// a synthetic empty output is prepended. This prevents "No tool output found for
+// function call" errors when tool execution is interrupted (e.g. Ctrl+C).
+func ensureFunctionCallOutputs(lastResponseOutput []byte, nextInputRaw string) string {
+	outputResult := gjson.ParseBytes(lastResponseOutput)
+	if !outputResult.IsArray() {
+		return nextInputRaw
+	}
+
+	var callIDs []string
+	outputResult.ForEach(func(_, item gjson.Result) bool {
+		if item.Get("type").String() == "function_call" {
+			if callID := strings.TrimSpace(item.Get("call_id").String()); callID != "" {
+				callIDs = append(callIDs, callID)
+			}
+		}
+		return true
+	})
+	if len(callIDs) == 0 {
+		return nextInputRaw
+	}
+
+	resolved := make(map[string]struct{})
+	nextResult := gjson.Parse(strings.TrimSpace(nextInputRaw))
+	if nextResult.IsArray() {
+		nextResult.ForEach(func(_, item gjson.Result) bool {
+			if item.Get("type").String() == "function_call_output" {
+				if callID := strings.TrimSpace(item.Get("call_id").String()); callID != "" {
+					resolved[callID] = struct{}{}
+				}
+			}
+			return true
+		})
+	}
+
+	var synthetics []json.RawMessage
+	for _, callID := range callIDs {
+		if _, ok := resolved[callID]; ok {
+			continue
+		}
+		item := []byte(`{"type":"function_call_output","call_id":"","output":""}`)
+		item, _ = sjson.SetBytes(item, "call_id", callID)
+		synthetics = append(synthetics, item)
+		log.Warnf("responses websocket: injecting synthetic function_call_output for orphaned call_id=%s", callID)
+	}
+	if len(synthetics) == 0 {
+		return nextInputRaw
+	}
+
+	var existing []json.RawMessage
+	if err := json.Unmarshal([]byte(nextInputRaw), &existing); err != nil {
+		return nextInputRaw
+	}
+	merged := append(synthetics, existing...)
+	result, err := json.Marshal(merged)
+	if err != nil {
+		return nextInputRaw
+	}
+	return string(result)
 }
 
 func (h *OpenAIResponsesAPIHandler) forwardResponsesWebsocket(

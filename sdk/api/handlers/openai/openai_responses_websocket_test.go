@@ -338,6 +338,122 @@ func TestNormalizeResponsesWebsocketRequestAppend(t *testing.T) {
 	}
 }
 
+func TestEnsureFunctionCallOutputsInjectsOrphanedCalls(t *testing.T) {
+	lastResponseOutput := []byte(`[
+		{"type":"message","id":"assistant-1"},
+		{"type":"function_call","id":"fc-1","call_id":"call-1","name":"shell"},
+		{"type":"function_call","id":"fc-2","call_id":"call-2","name":"read"}
+	]`)
+	nextInput := `[{"type":"message","id":"msg-2"}]`
+
+	result := ensureFunctionCallOutputs(lastResponseOutput, nextInput)
+	items := gjson.Parse(result).Array()
+	if len(items) != 3 {
+		t.Fatalf("result len = %d, want 3 (2 synthetic + 1 original)", len(items))
+	}
+	// Synthetic outputs are prepended.
+	if items[0].Get("type").String() != "function_call_output" || items[0].Get("call_id").String() != "call-1" {
+		t.Fatalf("items[0] = %s, want synthetic for call-1", items[0].Raw)
+	}
+	if items[1].Get("type").String() != "function_call_output" || items[1].Get("call_id").String() != "call-2" {
+		t.Fatalf("items[1] = %s, want synthetic for call-2", items[1].Raw)
+	}
+	if items[2].Get("id").String() != "msg-2" {
+		t.Fatalf("items[2] = %s, want original msg-2", items[2].Raw)
+	}
+}
+
+func TestEnsureFunctionCallOutputsNoOpWhenAllResolved(t *testing.T) {
+	lastResponseOutput := []byte(`[{"type":"function_call","call_id":"call-1"}]`)
+	nextInput := `[{"type":"function_call_output","call_id":"call-1","output":"done"}]`
+
+	result := ensureFunctionCallOutputs(lastResponseOutput, nextInput)
+	if result != nextInput {
+		t.Fatalf("expected no change when all function_calls are resolved")
+	}
+}
+
+func TestEnsureFunctionCallOutputsNoOpNoFunctionCalls(t *testing.T) {
+	lastResponseOutput := []byte(`[{"type":"message","id":"assistant-1"}]`)
+	nextInput := `[{"type":"message","id":"msg-2"}]`
+
+	result := ensureFunctionCallOutputs(lastResponseOutput, nextInput)
+	if result != nextInput {
+		t.Fatalf("expected no change when no function_calls in response")
+	}
+}
+
+// TestNormalizeResponsesWebsocketRequestCtrlCInterrupt simulates the Ctrl+C
+// scenario: model returns function_calls, user interrupts, next request has
+// no function_call_output. The proxy must inject synthetic outputs.
+func TestNormalizeResponsesWebsocketRequestCtrlCInterrupt(t *testing.T) {
+	lastRequest := []byte(`{"model":"test-model","stream":true,"input":[{"type":"message","id":"msg-1"}]}`)
+	lastResponseOutput := []byte(`[
+		{"type":"message","id":"assistant-1"},
+		{"type":"function_call","id":"fc-1","call_id":"call-1","name":"shell"}
+	]`)
+	// User Ctrl+C'd, then asks a new question — no function_call_output.
+	raw := []byte(`{"type":"response.create","input":[{"type":"message","id":"msg-2"}]}`)
+
+	normalized, _, errMsg := normalizeResponsesWebsocketRequest(raw, lastRequest, lastResponseOutput)
+	if errMsg != nil {
+		t.Fatalf("unexpected error: %v", errMsg.Error)
+	}
+
+	input := gjson.GetBytes(normalized, "input").Array()
+	// Should be: msg-1 + synthetic-output-for-call-1 + assistant-1 + fc-1 + msg-2
+	// Actually the flow is: merge(lastRequest.input, lastResponseOutput, augmented nextInput)
+	// augmented nextInput = [synthetic call-1 output, msg-2]
+	// So: [msg-1, assistant-1, fc-1, synthetic-output, msg-2]
+	hasOutput := false
+	hasFunctionCall := false
+	for _, item := range input {
+		if item.Get("type").String() == "function_call" && item.Get("call_id").String() == "call-1" {
+			hasFunctionCall = true
+		}
+		if item.Get("type").String() == "function_call_output" && item.Get("call_id").String() == "call-1" {
+			hasOutput = true
+		}
+	}
+	if !hasFunctionCall {
+		t.Fatalf("merged input should contain the function_call")
+	}
+	if !hasOutput {
+		t.Fatalf("merged input should contain a synthetic function_call_output for the interrupted call")
+	}
+}
+
+// TestNormalizeResponsesWebsocketRequestCtrlCInterruptIncremental tests the
+// same Ctrl+C scenario but in incremental mode.
+func TestNormalizeResponsesWebsocketRequestCtrlCInterruptIncremental(t *testing.T) {
+	lastRequest := []byte(`{"model":"test-model","stream":true,"input":[{"type":"message","id":"msg-1"}]}`)
+	lastResponseOutput := []byte(`[
+		{"type":"function_call","id":"fc-1","call_id":"call-1","name":"shell"}
+	]`)
+	// User Ctrl+C'd, then asks a new question — no function_call_output.
+	raw := []byte(`{"type":"response.create","previous_response_id":"resp-1","input":[{"type":"message","id":"msg-2"}]}`)
+
+	normalized, _, errMsg := normalizeResponsesWebsocketRequestWithMode(raw, lastRequest, lastResponseOutput, true)
+	if errMsg != nil {
+		t.Fatalf("unexpected error: %v", errMsg.Error)
+	}
+
+	// In incremental mode, the normalized request should include the synthetic output.
+	input := gjson.GetBytes(normalized, "input").Array()
+	hasOutput := false
+	for _, item := range input {
+		if item.Get("type").String() == "function_call_output" && item.Get("call_id").String() == "call-1" {
+			hasOutput = true
+		}
+	}
+	if !hasOutput {
+		t.Fatalf("incremental input should contain a synthetic function_call_output for the interrupted call")
+	}
+	if gjson.GetBytes(normalized, "previous_response_id").String() != "resp-1" {
+		t.Fatalf("previous_response_id must be preserved")
+	}
+}
+
 func TestNormalizeResponsesWebsocketRequestAppendWithoutCreate(t *testing.T) {
 	raw := []byte(`{"type":"response.append","input":[]}`)
 
