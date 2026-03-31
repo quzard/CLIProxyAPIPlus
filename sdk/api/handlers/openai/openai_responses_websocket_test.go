@@ -212,8 +212,22 @@ func TestNormalizeResponsesWebsocketRequestWithPreviousResponseIDIncremental(t *
 	if gjson.GetBytes(normalized, "instructions").String() != "be helpful" {
 		t.Fatalf("unexpected instructions: %s", gjson.GetBytes(normalized, "instructions").String())
 	}
-	if !bytes.Equal(next, normalized) {
-		t.Fatalf("next request snapshot should match normalized request")
+
+	// The lastRequest snapshot must contain the FULL conversation context
+	// (not just the incremental delta) so that a later fallback to merge
+	// mode has the complete history.
+	if gjson.GetBytes(next, "previous_response_id").Exists() {
+		t.Fatalf("next snapshot must not include previous_response_id")
+	}
+	nextInput := gjson.GetBytes(next, "input").Array()
+	if len(nextInput) != 4 {
+		t.Fatalf("next snapshot input len = %d, want 4 (full context)", len(nextInput))
+	}
+	if nextInput[0].Get("id").String() != "msg-1" ||
+		nextInput[1].Get("id").String() != "fc-1" ||
+		nextInput[2].Get("id").String() != "assistant-1" ||
+		nextInput[3].Get("id").String() != "tool-out-1" {
+		t.Fatalf("unexpected next snapshot input order: %v", nextInput)
 	}
 }
 
@@ -244,6 +258,55 @@ func TestNormalizeResponsesWebsocketRequestWithPreviousResponseIDMergedWhenIncre
 	}
 	if !bytes.Equal(next, normalized) {
 		t.Fatalf("next request snapshot should match normalized request")
+	}
+}
+
+// TestNormalizeResponsesWebsocketRequestIncrementalThenMerge simulates a session
+// that uses incremental mode for one turn and then falls back to merge mode.
+// The bug: if lastRequest only held incremental data, the merge would lose
+// all prior context (including function_call items), causing OpenAI to reject
+// the request with "No tool output found for function call".
+func TestNormalizeResponsesWebsocketRequestIncrementalThenMerge(t *testing.T) {
+	// Turn 1: initial create.
+	initialRequest := []byte(`{"model":"test-model","stream":true,"input":[{"type":"message","id":"msg-1"}]}`)
+	turn1Output := []byte(`[
+		{"type":"message","id":"assistant-1"},
+		{"type":"function_call","id":"fc-1","call_id":"call-1"}
+	]`)
+
+	// Turn 2: incremental with previous_response_id (client sends function_call_output only).
+	turn2Raw := []byte(`{"type":"response.create","previous_response_id":"resp-1","input":[{"type":"function_call_output","call_id":"call-1","id":"tool-out-1"}]}`)
+	_, turn2LastRequest, errMsg := normalizeResponsesWebsocketRequestWithMode(turn2Raw, initialRequest, turn1Output, true)
+	if errMsg != nil {
+		t.Fatalf("turn 2 error: %v", errMsg.Error)
+	}
+
+	// Turn 2 response output.
+	turn2Output := []byte(`[
+		{"type":"message","id":"assistant-2"},
+		{"type":"function_call","id":"fc-2","call_id":"call-2"}
+	]`)
+
+	// Turn 3: mode switches to merge (e.g. auth changed).
+	turn3Raw := []byte(`{"type":"response.create","previous_response_id":"resp-2","input":[{"type":"function_call_output","call_id":"call-2","id":"tool-out-2"}]}`)
+	normalized, _, errMsg := normalizeResponsesWebsocketRequestWithMode(turn3Raw, turn2LastRequest, turn2Output, false)
+	if errMsg != nil {
+		t.Fatalf("turn 3 error: %v", errMsg.Error)
+	}
+	if gjson.GetBytes(normalized, "previous_response_id").Exists() {
+		t.Fatalf("previous_response_id must be removed in merge mode")
+	}
+
+	// The merged input must contain the full conversation history.
+	input := gjson.GetBytes(normalized, "input").Array()
+	expectedIDs := []string{"msg-1", "assistant-1", "fc-1", "tool-out-1", "assistant-2", "fc-2", "tool-out-2"}
+	if len(input) != len(expectedIDs) {
+		t.Fatalf("merged input len = %d, want %d", len(input), len(expectedIDs))
+	}
+	for i, wantID := range expectedIDs {
+		if got := input[i].Get("id").String(); got != wantID {
+			t.Fatalf("input[%d].id = %s, want %s", i, got, wantID)
+		}
 	}
 }
 

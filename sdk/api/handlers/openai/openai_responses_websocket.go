@@ -298,6 +298,21 @@ func normalizeResponseSubsequentRequest(rawJSON []byte, lastRequest []byte, last
 				}
 			}
 			normalized, _ = sjson.SetBytes(normalized, "stream", true)
+
+			// Build a full-context snapshot for lastRequest so that a later
+			// fallback to merge mode has the complete conversation history.
+			existingInput := gjson.GetBytes(lastRequest, "input")
+			fullInput, errMerge := mergeJSONArrayRaw(existingInput.Raw, normalizeJSONArrayRaw(lastResponseOutput))
+			if errMerge == nil {
+				fullInput, errMerge = mergeJSONArrayRaw(fullInput, nextInput.Raw)
+			}
+			if errMerge == nil {
+				fullSnapshot := bytes.Clone(normalized)
+				fullSnapshot, _ = sjson.DeleteBytes(fullSnapshot, "previous_response_id")
+				fullSnapshot, _ = sjson.SetRawBytes(fullSnapshot, "input", []byte(fullInput))
+				return normalized, fullSnapshot, nil
+			}
+
 			return normalized, bytes.Clone(normalized), nil
 		}
 	}
