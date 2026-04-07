@@ -65,13 +65,27 @@ func (r *UsageReporter) publishWithOutcome(ctx context.Context, detail usage.Det
 		return
 	}
 	r.captureThinkingEffort(ctx)
+	if detail.CachedTokens == 0 {
+		if detail.CacheReadTokens > 0 {
+			detail.CachedTokens = detail.CacheReadTokens
+		} else if detail.CacheCreationTokens > 0 {
+			detail.CachedTokens = detail.CacheCreationTokens
+		}
+	}
 	if detail.TotalTokens == 0 {
 		total := detail.InputTokens + detail.OutputTokens + detail.ReasoningTokens
 		if total > 0 {
 			detail.TotalTokens = total
 		}
 	}
-	if detail.InputTokens == 0 && detail.OutputTokens == 0 && detail.ReasoningTokens == 0 && detail.CachedTokens == 0 && detail.TotalTokens == 0 && !failed {
+	if detail.InputTokens == 0 &&
+		detail.OutputTokens == 0 &&
+		detail.ReasoningTokens == 0 &&
+		detail.CachedTokens == 0 &&
+		detail.CacheReadTokens == 0 &&
+		detail.CacheCreationTokens == 0 &&
+		detail.TotalTokens == 0 &&
+		!failed {
 		return
 	}
 	r.once.Do(func() {
@@ -229,6 +243,7 @@ func ParseCodexUsage(data []byte) (usage.Detail, bool) {
 	}
 	if cached := usageNode.Get("input_tokens_details.cached_tokens"); cached.Exists() {
 		detail.CachedTokens = cached.Int()
+		detail.CacheReadTokens = detail.CachedTokens
 	}
 	if reasoning := usageNode.Get("output_tokens_details.reasoning_tokens"); reasoning.Exists() {
 		detail.ReasoningTokens = reasoning.Int()
@@ -260,6 +275,7 @@ func ParseOpenAIUsage(data []byte) usage.Detail {
 	}
 	if cached.Exists() {
 		detail.CachedTokens = cached.Int()
+		detail.CacheReadTokens = detail.CachedTokens
 	}
 	reasoning := usageNode.Get("completion_tokens_details.reasoning_tokens")
 	if !reasoning.Exists() {
@@ -301,6 +317,7 @@ func ParseOpenAIStreamUsage(line []byte) (usage.Detail, bool) {
 	}
 	if cached.Exists() {
 		detail.CachedTokens = cached.Int()
+		detail.CacheReadTokens = detail.CachedTokens
 	}
 
 	reasoning := usageNode.Get("completion_tokens_details.reasoning_tokens")
@@ -319,13 +336,15 @@ func ParseClaudeUsage(data []byte) usage.Detail {
 		return usage.Detail{}
 	}
 	detail := usage.Detail{
-		InputTokens:  usageNode.Get("input_tokens").Int(),
-		OutputTokens: usageNode.Get("output_tokens").Int(),
-		CachedTokens: usageNode.Get("cache_read_input_tokens").Int(),
+		InputTokens:         usageNode.Get("input_tokens").Int(),
+		OutputTokens:        usageNode.Get("output_tokens").Int(),
+		CacheReadTokens:     usageNode.Get("cache_read_input_tokens").Int(),
+		CacheCreationTokens: usageNode.Get("cache_creation_input_tokens").Int(),
 	}
+	detail.CachedTokens = detail.CacheReadTokens
 	if detail.CachedTokens == 0 {
 		// fall back to creation tokens when read tokens are absent
-		detail.CachedTokens = usageNode.Get("cache_creation_input_tokens").Int()
+		detail.CachedTokens = detail.CacheCreationTokens
 	}
 	detail.TotalTokens = detail.InputTokens + detail.OutputTokens
 	return detail
@@ -341,12 +360,14 @@ func ParseClaudeStreamUsage(line []byte) (usage.Detail, bool) {
 		return usage.Detail{}, false
 	}
 	detail := usage.Detail{
-		InputTokens:  usageNode.Get("input_tokens").Int(),
-		OutputTokens: usageNode.Get("output_tokens").Int(),
-		CachedTokens: usageNode.Get("cache_read_input_tokens").Int(),
+		InputTokens:         usageNode.Get("input_tokens").Int(),
+		OutputTokens:        usageNode.Get("output_tokens").Int(),
+		CacheReadTokens:     usageNode.Get("cache_read_input_tokens").Int(),
+		CacheCreationTokens: usageNode.Get("cache_creation_input_tokens").Int(),
 	}
+	detail.CachedTokens = detail.CacheReadTokens
 	if detail.CachedTokens == 0 {
-		detail.CachedTokens = usageNode.Get("cache_creation_input_tokens").Int()
+		detail.CachedTokens = detail.CacheCreationTokens
 	}
 	detail.TotalTokens = detail.InputTokens + detail.OutputTokens
 	return detail, true
@@ -360,6 +381,7 @@ func parseGeminiFamilyUsageDetail(node gjson.Result) usage.Detail {
 		TotalTokens:     node.Get("totalTokenCount").Int(),
 		CachedTokens:    node.Get("cachedContentTokenCount").Int(),
 	}
+	detail.CacheReadTokens = detail.CachedTokens
 	if detail.TotalTokens == 0 {
 		detail.TotalTokens = detail.InputTokens + detail.OutputTokens + detail.ReasoningTokens
 	}

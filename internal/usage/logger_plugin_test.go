@@ -164,6 +164,35 @@ func TestRequestStatisticsRecordIncludesThinkingEffort(t *testing.T) {
 	}
 }
 
+func TestRequestStatisticsRecordPreservesSplitCacheTokens(t *testing.T) {
+	stats := NewRequestStatistics()
+	stats.Record(context.Background(), coreusage.Record{
+		APIKey:      "test-key",
+		Model:       "claude-sonnet-4",
+		RequestedAt: time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
+		Detail: coreusage.Detail{
+			InputTokens:         13,
+			OutputTokens:        4,
+			CachedTokens:        22000,
+			CacheReadTokens:     22000,
+			CacheCreationTokens: 31,
+			TotalTokens:         17,
+		},
+	})
+
+	snapshot := stats.Snapshot()
+	details := snapshot.APIs["test-key"].Models["claude-sonnet-4"].Details
+	if len(details) != 1 {
+		t.Fatalf("details len = %d, want 1", len(details))
+	}
+	if details[0].Tokens.CacheReadTokens != 22000 {
+		t.Fatalf("cache_read_tokens = %d, want %d", details[0].Tokens.CacheReadTokens, 22000)
+	}
+	if details[0].Tokens.CacheCreationTokens != 31 {
+		t.Fatalf("cache_creation_tokens = %d, want %d", details[0].Tokens.CacheCreationTokens, 31)
+	}
+}
+
 func TestRequestStatisticsMergeSnapshotDedupSeparatesThinkingEffort(t *testing.T) {
 	stats := NewRequestStatistics()
 	timestamp := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)

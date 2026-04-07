@@ -46,8 +46,47 @@ func TestParseOpenAIUsageResponses(t *testing.T) {
 	if detail.CachedTokens != 7 {
 		t.Fatalf("cached tokens = %d, want %d", detail.CachedTokens, 7)
 	}
+	if detail.CacheReadTokens != 7 {
+		t.Fatalf("cache read tokens = %d, want %d", detail.CacheReadTokens, 7)
+	}
 	if detail.ReasoningTokens != 9 {
 		t.Fatalf("reasoning tokens = %d, want %d", detail.ReasoningTokens, 9)
+	}
+}
+
+func TestParseClaudeUsageKeepsSplitCacheTokens(t *testing.T) {
+	data := []byte(`{"usage":{"input_tokens":13,"output_tokens":4,"cache_read_input_tokens":22000,"cache_creation_input_tokens":31}}`)
+	detail := ParseClaudeUsage(data)
+
+	if detail.InputTokens != 13 {
+		t.Fatalf("input tokens = %d, want %d", detail.InputTokens, 13)
+	}
+	if detail.OutputTokens != 4 {
+		t.Fatalf("output tokens = %d, want %d", detail.OutputTokens, 4)
+	}
+	if detail.CachedTokens != 22000 {
+		t.Fatalf("cached tokens = %d, want %d", detail.CachedTokens, 22000)
+	}
+	if detail.CacheReadTokens != 22000 {
+		t.Fatalf("cache read tokens = %d, want %d", detail.CacheReadTokens, 22000)
+	}
+	if detail.CacheCreationTokens != 31 {
+		t.Fatalf("cache creation tokens = %d, want %d", detail.CacheCreationTokens, 31)
+	}
+}
+
+func TestParseClaudeUsageFallsBackCachedTokensToCreationWhenReadMissing(t *testing.T) {
+	data := []byte(`{"usage":{"input_tokens":13,"output_tokens":4,"cache_creation_input_tokens":31}}`)
+	detail := ParseClaudeUsage(data)
+
+	if detail.CachedTokens != 31 {
+		t.Fatalf("cached tokens = %d, want %d", detail.CachedTokens, 31)
+	}
+	if detail.CacheReadTokens != 0 {
+		t.Fatalf("cache read tokens = %d, want %d", detail.CacheReadTokens, 0)
+	}
+	if detail.CacheCreationTokens != 31 {
+		t.Fatalf("cache creation tokens = %d, want %d", detail.CacheCreationTokens, 31)
 	}
 }
 
