@@ -183,9 +183,11 @@ func (h *OpenAIResponsesAPIHandler) ResponsesWebsocket(c *gin.Context) {
 				if !ok || selectedAuth == nil {
 					return
 				}
-				if websocketUpstreamSupportsIncrementalInput(selectedAuth.Attributes, selectedAuth.Metadata) {
-					pinnedAuthID = authID
-				}
+				// Keep a stable upstream auth for the whole downstream websocket
+				// session once the first turn selects one. Follow-up requests may
+				// carry previous_response_id and tool outputs whose call_id only
+				// exists in that original upstream conversation context.
+				pinnedAuthID = authID
 			})
 		}
 		dataChan, _, errChan := h.ExecuteStreamWithAuthManager(cliCtx, h.HandlerType(), modelName, requestJSON, "")

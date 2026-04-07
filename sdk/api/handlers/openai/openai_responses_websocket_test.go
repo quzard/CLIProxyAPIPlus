@@ -1175,7 +1175,7 @@ func TestWebsocketClientAddressReturnsEmptyForNilContext(t *testing.T) {
 	}
 }
 
-func TestResponsesWebsocketPinsOnlyWebsocketCapableAuth(t *testing.T) {
+func TestResponsesWebsocketPinsSelectedAuthForWholeSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	selector := &orderedWebsocketSelector{order: []string{"auth-sse", "auth-ws"}}
@@ -1240,8 +1240,8 @@ func TestResponsesWebsocketPinsOnlyWebsocketCapableAuth(t *testing.T) {
 		}
 	}
 
-	if got := executor.AuthIDs(); len(got) != 2 || got[0] != "auth-sse" || got[1] != "auth-ws" {
-		t.Fatalf("selected auth IDs = %v, want [auth-sse auth-ws]", got)
+	if got := executor.AuthIDs(); len(got) != 2 || got[0] != "auth-sse" || got[1] != "auth-sse" {
+		t.Fatalf("selected auth IDs = %v, want [auth-sse auth-sse]", got)
 	}
 }
 
