@@ -137,6 +137,13 @@ type Config struct {
 	// gemini-api-key, codex-api-key, claude-api-key, openai-compatibility, vertex-api-key, and ampcode.
 	OAuthModelAlias map[string][]OAuthModelAlias `yaml:"oauth-model-alias,omitempty" json:"oauth-model-alias,omitempty"`
 
+	// UsageModelPrices stores management-panel pricing rules used for usage cost estimation.
+	// This is a shared server-side display configuration, not billing state.
+	UsageModelPrices map[string]UsageModelPrice `yaml:"usage-model-prices,omitempty" json:"usage-model-prices,omitempty"`
+
+	// UsageDisabledDefaultModels stores disabled built-in pricing presets for the usage dashboard.
+	UsageDisabledDefaultModels []string `yaml:"usage-disabled-default-models,omitempty" json:"usage-disabled-default-models,omitempty"`
+
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
 
@@ -146,6 +153,15 @@ type Config struct {
 	IncognitoBrowser bool `yaml:"incognito-browser" json:"incognito-browser"`
 
 	legacyMigrationPending bool `yaml:"-" json:"-"`
+}
+
+// UsageModelPrice represents per-model display pricing for the usage dashboard.
+type UsageModelPrice struct {
+	Prompt        float64 `yaml:"prompt" json:"prompt"`
+	Completion    float64 `yaml:"completion" json:"completion"`
+	Cache         float64 `yaml:"cache,omitempty" json:"cache,omitempty"`
+	CacheRead     float64 `yaml:"cache-read,omitempty" json:"cacheRead,omitempty"`
+	CacheCreation float64 `yaml:"cache-creation,omitempty" json:"cacheCreation,omitempty"`
 }
 
 // ClaudeHeaderDefaults configures default header values injected into Claude API requests.
