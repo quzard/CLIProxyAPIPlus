@@ -1045,8 +1045,8 @@ func normalizeGitHubCopilotResponsesInput(body []byte) []byte {
 }
 
 func stripGitHubCopilotResponsesUnsupportedFields(body []byte) []byte {
-	// GitHub Copilot /responses rejects service_tier, so always remove it.
-	body, _ = sjson.DeleteBytes(body, "service_tier")
+	// service_tier is now supported, so we no longer need to remove it.
+	// Users can configure service_tier via payload rules in config.yaml.
 	return body
 }
 
