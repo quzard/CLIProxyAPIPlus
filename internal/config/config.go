@@ -549,6 +549,10 @@ type KiroKey struct {
 	// PreferredEndpoint sets the preferred Kiro API endpoint/quota.
 	// Values: "codewhisperer" (default, IDE quota) or "amazonq" (CLI quota).
 	PreferredEndpoint string `yaml:"preferred-endpoint,omitempty" json:"preferred-endpoint,omitempty"`
+
+	// APIKeys restricts this credential to requests authenticated with one of these API keys.
+	// When empty, the credential is available to all API keys (default behavior).
+	APIKeys []string `yaml:"api-keys,omitempty" json:"api-keys,omitempty"`
 }
 
 // KiroFingerprintConfig defines a global fingerprint configuration for Kiro requests.

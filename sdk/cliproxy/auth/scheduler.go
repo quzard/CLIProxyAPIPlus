@@ -178,6 +178,7 @@ func (s *authScheduler) pickSingle(ctx context.Context, provider, model string, 
 	providerKey := strings.ToLower(strings.TrimSpace(provider))
 	modelKey := canonicalModelKey(model)
 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+	clientAPIKey := clientAPIKeyFromMetadata(opts.Metadata)
 	preferWebsocket := cliproxyexecutor.DownstreamWebsocket(ctx) && providerKey == "codex" && pinnedAuthID == ""
 
 	s.mu.Lock()
@@ -201,6 +202,9 @@ func (s *authScheduler) pickSingle(ctx context.Context, provider, model string, 
 			if _, ok := tried[entry.auth.ID]; ok {
 				return false
 			}
+		}
+		if !isAuthAllowedForAPIKey(entry.auth, clientAPIKey) {
+			return false
 		}
 		return true
 	}
@@ -233,6 +237,7 @@ func (s *authScheduler) pickMixed(ctx context.Context, providers []string, model
 		return picked, providerKey, nil
 	}
 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+	clientAPIKey := clientAPIKeyFromMetadata(opts.Metadata)
 	modelKey := canonicalModelKey(model)
 
 	s.mu.Lock()
@@ -263,7 +268,7 @@ func (s *authScheduler) pickMixed(ctx context.Context, providers []string, model
 		return nil, "", shard.unavailableErrorLocked("mixed", model, predicate)
 	}
 
-	predicate := triedPredicate(tried)
+	predicate := triedAndAPIKeyPredicate(tried, clientAPIKey)
 	candidateShards := make([]*modelScheduler, len(normalized))
 	bestPriority := 0
 	hasCandidate := false
@@ -407,6 +412,25 @@ func triedPredicate(tried map[string]struct{}) func(*scheduledAuth) bool {
 		}
 		_, ok := tried[entry.auth.ID]
 		return !ok
+	}
+}
+
+// triedAndAPIKeyPredicate builds a filter that excludes auths already attempted and
+// auths not allowed for the given client API key.
+func triedAndAPIKeyPredicate(tried map[string]struct{}, clientAPIKey string) func(*scheduledAuth) bool {
+	return func(entry *scheduledAuth) bool {
+		if entry == nil || entry.auth == nil {
+			return false
+		}
+		if len(tried) > 0 {
+			if _, ok := tried[entry.auth.ID]; ok {
+				return false
+			}
+		}
+		if !isAuthAllowedForAPIKey(entry.auth, clientAPIKey) {
+			return false
+		}
+		return true
 	}
 }
 

@@ -394,6 +394,9 @@ func (s *ConfigSynthesizer) synthesizeKiroKeys(ctx *SynthesisContext) []*coreaut
 		if refreshToken != "" {
 			attrs["refresh_token"] = refreshToken
 		}
+		if len(kk.APIKeys) > 0 {
+			attrs["allowed_api_keys"] = strings.Join(kk.APIKeys, ",")
+		}
 		proxyURL := strings.TrimSpace(kk.ProxyURL)
 		a := &coreauth.Auth{
 			ID:         id,

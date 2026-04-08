@@ -19,6 +19,8 @@ const (
 	SelectedAuthCallbackMetadataKey = "selected_auth_callback"
 	// ExecutionSessionMetadataKey identifies a long-lived downstream execution session.
 	ExecutionSessionMetadataKey = "execution_session_id"
+	// ClientAPIKeyMetadataKey carries the authenticated client API key for credential filtering.
+	ClientAPIKeyMetadataKey = "client_api_key"
 )
 
 // Request encapsulates the translated payload that will be sent to a provider executor.

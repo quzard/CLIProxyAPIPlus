@@ -200,6 +200,13 @@ func requestExecutionMetadata(ctx context.Context) map[string]any {
 	}
 
 	meta := map[string]any{idempotencyKeyMetadataKey: key}
+	if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil {
+		if apiKey, exists := ginCtx.Get("apiKey"); exists {
+			if keyStr, ok := apiKey.(string); ok && keyStr != "" {
+				meta[coreexecutor.ClientAPIKeyMetadataKey] = keyStr
+			}
+		}
+	}
 	if pinnedAuthID := pinnedAuthIDFromContext(ctx); pinnedAuthID != "" {
 		meta[coreexecutor.PinnedAuthMetadataKey] = pinnedAuthID
 	}

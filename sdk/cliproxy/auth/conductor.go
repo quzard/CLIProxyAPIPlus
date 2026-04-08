@@ -1503,6 +1503,43 @@ func hasRequestedModelMetadata(meta map[string]any) bool {
 	}
 }
 
+func clientAPIKeyFromMetadata(meta map[string]any) string {
+	if len(meta) == 0 {
+		return ""
+	}
+	raw, ok := meta[cliproxyexecutor.ClientAPIKeyMetadataKey]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch val := raw.(type) {
+	case string:
+		return strings.TrimSpace(val)
+	case []byte:
+		return strings.TrimSpace(string(val))
+	default:
+		return ""
+	}
+}
+
+func isAuthAllowedForAPIKey(auth *Auth, clientAPIKey string) bool {
+	if auth == nil || auth.Attributes == nil {
+		return true
+	}
+	allowed := strings.TrimSpace(auth.Attributes["allowed_api_keys"])
+	if allowed == "" {
+		return true
+	}
+	if clientAPIKey == "" {
+		return false
+	}
+	for _, key := range strings.Split(allowed, ",") {
+		if strings.TrimSpace(key) == clientAPIKey {
+			return true
+		}
+	}
+	return false
+}
+
 func pinnedAuthIDFromMetadata(meta map[string]any) string {
 	if len(meta) == 0 {
 		return ""
@@ -2544,6 +2581,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 			modelKey = strings.TrimSpace(parsed.ModelName)
 		}
 	}
+	clientAPIKey := clientAPIKeyFromMetadata(opts.Metadata)
 	registryRef := registry.GetGlobalRegistry()
 	for _, candidate := range m.auths {
 		if candidate.Provider != provider || candidate.Disabled {
@@ -2553,6 +2591,9 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 			continue
 		}
 		if _, used := tried[candidate.ID]; used {
+			continue
+		}
+		if !isAuthAllowedForAPIKey(candidate, clientAPIKey) {
 			continue
 		}
 		if modelKey != "" && !m.authSupportsRouteModel(registryRef, candidate, model) {
@@ -2663,6 +2704,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 			modelKey = strings.TrimSpace(parsed.ModelName)
 		}
 	}
+	clientAPIKey := clientAPIKeyFromMetadata(opts.Metadata)
 	registryRef := registry.GetGlobalRegistry()
 	for _, candidate := range m.auths {
 		if candidate == nil || candidate.Disabled {
@@ -2679,6 +2721,9 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 			continue
 		}
 		if _, used := tried[candidate.ID]; used {
+			continue
+		}
+		if !isAuthAllowedForAPIKey(candidate, clientAPIKey) {
 			continue
 		}
 		if _, ok := m.executors[providerKey]; !ok {

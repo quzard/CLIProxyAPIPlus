@@ -221,6 +221,9 @@ nonstream-keepalive-interval: 0
 #    agent-task-type: "" # optional: "vibe" or empty (API default)
 #    start-url: "https://your-company.awsapps.com/start" # optional: IDC start URL (preset for login)
 #    region: "us-east-1" # optional: OIDC region for IDC login and token refresh
+#    api-keys: # optional: restrict this credential to specific API keys
+#      - "your-api-key-1"
+#      - "your-api-key-2"
 #  - access-token: "aoaAAAAA..." # or provide tokens directly
 #    refresh-token: "aorAAAAA..."
 #    profile-arn: "arn:aws:codewhisperer:us-east-1:..."
