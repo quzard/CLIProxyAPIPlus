@@ -429,7 +429,7 @@ nonstream-keepalive-interval: 0
 #       params: # JSON path (gjson/sjson syntax) -> value
 #         "reasoning.effort": "high"
 #     - models:
-#         - name: "gpt-5.4*" # Matches gpt-5.4 and variants such as gpt-5.4(high)
+#         - name: "gpt-5.4*" # Matches both gpt-5.4 itself and variants such as gpt-5.4(high)
 #       params:
 #         "service_tier": "priority"
 #   override-raw: # Override raw rules always set parameters using raw JSON (must be valid JSON).
