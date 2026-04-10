@@ -44,6 +44,19 @@ api-keys:
   - 'your-api-key-2'
   - 'your-api-key-3'
 
+# Per-API-key credential restrictions (optional).
+# Bound API keys can ONLY access their listed credentials.
+# Credentials claimed by bindings become exclusive to those bound keys.
+# Unbound API keys can access all credentials NOT claimed by any binding.
+#api-key-bindings:
+#  - api-key: "your-api-key-2"
+#    allowed-credentials:
+#      - "codex-ee6c0c39-user@example.com-team.json"
+#      - "claude-abc123-friend@gmail.com.json"
+#  - api-key: "your-api-key-3"
+#    allowed-credentials:
+#      - "codex-ff7d1a42-other@example.com.json"
+
 # Enable debug logging
 debug: false
 
@@ -221,9 +234,6 @@ nonstream-keepalive-interval: 0
 #    agent-task-type: "" # optional: "vibe" or empty (API default)
 #    start-url: "https://your-company.awsapps.com/start" # optional: IDC start URL (preset for login)
 #    region: "us-east-1" # optional: OIDC region for IDC login and token refresh
-#    api-keys: # optional: restrict this credential to specific API keys
-#      - "your-api-key-1"
-#      - "your-api-key-2"
 #  - access-token: "aoaAAAAA..." # or provide tokens directly
 #    refresh-token: "aorAAAAA..."
 #    profile-arn: "arn:aws:codewhisperer:us-east-1:..."

@@ -51,11 +51,22 @@ func (w *Watcher) dispatchRuntimeAuthUpdate(update AuthUpdate) bool {
 	case AuthUpdateActionAdd, AuthUpdateActionModify:
 		if update.Auth != nil && update.Auth.ID != "" {
 			clone := update.Auth.Clone()
+			if w.config != nil {
+				if len(w.config.APIKeyBindings) > 0 {
+					synthesizer.ApplyAPIKeyBindings([]*coreauth.Auth{clone}, w.config.APIKeyBindings)
+				} else if clone.Attributes != nil {
+					// Bindings cleared — strip stale binding attributes.
+					delete(clone.Attributes, "allowed_api_keys")
+					delete(clone.Attributes, "denied_api_keys")
+				}
+			}
 			w.runtimeAuths[clone.ID] = clone
 			if w.currentAuths == nil {
 				w.currentAuths = make(map[string]*coreauth.Auth)
 			}
 			w.currentAuths[clone.ID] = clone.Clone()
+			// Replace the update's Auth with the bound clone so consumers see bindings.
+			update = AuthUpdate{Action: update.Action, ID: update.ID, Auth: clone.Clone()}
 		}
 	case AuthUpdateActionDelete:
 		id := update.ID
@@ -85,11 +96,34 @@ func (w *Watcher) refreshAuthState(force bool) {
 	auths := snapshotCoreAuthsFunc(cfg, authDir)
 	w.clientsMutex.Lock()
 	if len(w.runtimeAuths) > 0 {
+		var runtimeSlice []*coreauth.Auth
 		for _, a := range w.runtimeAuths {
 			if a != nil {
-				auths = append(auths, a.Clone())
+				clone := a.Clone()
+				runtimeSlice = append(runtimeSlice, clone)
 			}
 		}
+		// Re-apply bindings to runtime auths so config reloads take effect.
+		if cfg != nil {
+			if len(cfg.APIKeyBindings) > 0 {
+				synthesizer.ApplyAPIKeyBindings(runtimeSlice, cfg.APIKeyBindings)
+			} else {
+				// Bindings cleared — strip stale binding attributes from runtime auths.
+				for _, ra := range runtimeSlice {
+					if ra != nil && ra.Attributes != nil {
+						delete(ra.Attributes, "allowed_api_keys")
+						delete(ra.Attributes, "denied_api_keys")
+					}
+				}
+			}
+			// Update stored runtime auths with refreshed bindings.
+			for _, ra := range runtimeSlice {
+				if ra != nil {
+					w.runtimeAuths[ra.ID] = ra.Clone()
+				}
+			}
+		}
+		auths = append(auths, runtimeSlice...)
 	}
 	updates := w.prepareAuthUpdatesLocked(auths, force)
 	w.clientsMutex.Unlock()
@@ -273,6 +307,10 @@ func snapshotCoreAuths(cfg *config.Config, authDir string) []*coreauth.Auth {
 	fileSynth := synthesizer.NewFileSynthesizer()
 	if auths, err := fileSynth.Synthesize(ctx); err == nil {
 		out = append(out, auths...)
+	}
+
+	if cfg != nil {
+		synthesizer.ApplyAPIKeyBindings(out, cfg.APIKeyBindings)
 	}
 
 	return out

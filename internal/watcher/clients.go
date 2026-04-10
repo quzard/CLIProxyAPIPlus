@@ -216,6 +216,7 @@ func (w *Watcher) addOrUpdateClient(path string) {
 		IDGenerator: synthesizer.NewStableIDGenerator(),
 	}
 	generated := synthesizer.SynthesizeAuthFile(sctx, path, data)
+	synthesizer.ApplyAPIKeyBindings(generated, w.config.APIKeyBindings)
 	newByID := authSliceToMap(generated)
 	if len(newByID) > 0 {
 		w.fileAuthsByPath[normalized] = authIDSet(newByID)

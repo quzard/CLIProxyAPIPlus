@@ -103,6 +103,115 @@ func ApplyAuthExcludedModelsMeta(auth *coreauth.Auth, cfg *config.Config, perKey
 	}
 }
 
+// ApplyAPIKeyBindings enforces per-API-key credential restrictions based on
+// the top-level api-key-bindings configuration.
+//
+// Semantics:
+//   - A credential referenced by one or more bindings gets "allowed_api_keys"
+//     set to the union of those API keys (whitelist — only listed keys may use it).
+//   - A credential NOT referenced by any binding gets "denied_api_keys" set to
+//     all bound API keys (blacklist — bound keys are restricted to their own
+//     credentials and must not fall through to unbound ones).
+//   - API keys that do not appear in any binding are unrestricted.
+//
+// Both attributes are stored as sorted, deduplicated CSV strings.
+func ApplyAPIKeyBindings(auths []*coreauth.Auth, bindings []config.APIKeyBinding) {
+	if len(bindings) == 0 || len(auths) == 0 {
+		return
+	}
+
+	// Collect all bound API keys (deduplicated) and build reverse map.
+	boundKeySet := make(map[string]struct{})
+	credToKeys := make(map[string]map[string]struct{})
+	for _, b := range bindings {
+		ak := strings.TrimSpace(b.APIKey)
+		if ak == "" {
+			continue
+		}
+		boundKeySet[ak] = struct{}{}
+		for _, cred := range b.AllowedCredentials {
+			cred = strings.TrimSpace(cred)
+			if cred == "" {
+				continue
+			}
+			if credToKeys[cred] == nil {
+				credToKeys[cred] = make(map[string]struct{})
+			}
+			credToKeys[cred][ak] = struct{}{}
+		}
+	}
+	if len(boundKeySet) == 0 {
+		// All api-keys were blank — treat as no bindings and clean up stale attrs.
+		for _, a := range auths {
+			if a != nil && a.Attributes != nil {
+				delete(a.Attributes, "allowed_api_keys")
+				delete(a.Attributes, "denied_api_keys")
+			}
+		}
+		return
+	}
+
+	// Pre-compute sorted denied list (all bound keys) for unbound credentials.
+	deniedList := sortedKeys(boundKeySet)
+	deniedCSV := strings.Join(deniedList, ",")
+
+	for _, a := range auths {
+		if a == nil {
+			continue
+		}
+		if a.Attributes == nil {
+			a.Attributes = make(map[string]string)
+		}
+		// Merge exact match and parent match for Gemini virtual auths (union).
+		// e.g. if "file.json" is bound to keyA and "file.json::project" to keyB,
+		// the virtual auth gets both keyA and keyB.
+		keys := mergeKeySets(credToKeys[a.ID], nil)
+		if parent := a.Attributes["gemini_virtual_parent"]; parent != "" {
+			keys = mergeKeySets(keys, credToKeys[parent])
+		}
+		if len(keys) > 0 {
+			// Credential is bound → whitelist.
+			a.Attributes["allowed_api_keys"] = strings.Join(sortedKeys(keys), ",")
+			delete(a.Attributes, "denied_api_keys")
+		} else {
+			// Credential is unbound → deny all bound keys.
+			a.Attributes["denied_api_keys"] = deniedCSV
+			delete(a.Attributes, "allowed_api_keys")
+		}
+	}
+}
+
+// sortedKeys returns the keys of a set as a sorted slice.
+func sortedKeys(m map[string]struct{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// mergeKeySets returns the union of two key sets. Returns nil if both are nil/empty.
+func mergeKeySets(a, b map[string]struct{}) map[string]struct{} {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+	merged := make(map[string]struct{}, len(a)+len(b))
+	for k := range a {
+		merged[k] = struct{}{}
+	}
+	for k := range b {
+		merged[k] = struct{}{}
+	}
+	return merged
+}
+
 // addConfigHeadersToAttrs adds header configuration to auth attributes.
 // Headers are prefixed with "header:" in the attributes map.
 func addConfigHeadersToAttrs(headers map[string]string, attrs map[string]string) {

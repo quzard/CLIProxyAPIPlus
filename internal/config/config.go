@@ -87,6 +87,13 @@ type Config struct {
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
+	// APIKeyBindings defines per-API-key credential restrictions.
+	// Each entry maps an API key to a list of allowed credential IDs (Auth.ID).
+	// A bound API key can ONLY access its listed credentials.
+	// Credentials listed in any binding become exclusive to those bound keys.
+	// Unbound API keys can access all credentials that are NOT claimed by any binding.
+	APIKeyBindings []APIKeyBinding `yaml:"api-key-bindings,omitempty" json:"api-key-bindings,omitempty"`
+
 	// GeminiKey defines Gemini API key configurations with optional routing overrides.
 	GeminiKey []GeminiKey `yaml:"gemini-api-key" json:"gemini-api-key"`
 
@@ -153,6 +160,22 @@ type Config struct {
 	IncognitoBrowser bool `yaml:"incognito-browser" json:"incognito-browser"`
 
 	legacyMigrationPending bool `yaml:"-" json:"-"`
+}
+
+// APIKeyBinding maps an API key to a list of allowed credential IDs.
+// A bound API key can ONLY access credentials listed in its AllowedCredentials.
+// Credentials referenced by bindings are restricted to those bound API keys.
+// Credentials NOT referenced by any binding are accessible to unbound API keys,
+// but NOT to bound API keys (bound keys are confined to their allowed list).
+// API keys not listed in any binding can access all credentials freely.
+type APIKeyBinding struct {
+	// APIKey is the client-facing API key (sk-xxx) to restrict.
+	APIKey string `yaml:"api-key" json:"api-key"`
+
+	// AllowedCredentials lists Auth.ID values this API key may use.
+	// For OAuth files this is the filename (e.g. "codex-ee6c0c39-user@example.com-team.json").
+	// For config-based credentials this is the stable ID (e.g. "codex:apikey:abc123").
+	AllowedCredentials []string `yaml:"allowed-credentials" json:"allowed-credentials"`
 }
 
 // UsageModelPrice represents per-model display pricing for the usage dashboard.
@@ -549,10 +572,6 @@ type KiroKey struct {
 	// PreferredEndpoint sets the preferred Kiro API endpoint/quota.
 	// Values: "codewhisperer" (default, IDE quota) or "amazonq" (CLI quota).
 	PreferredEndpoint string `yaml:"preferred-endpoint,omitempty" json:"preferred-endpoint,omitempty"`
-
-	// APIKeys restricts this credential to requests authenticated with one of these API keys.
-	// When empty, the credential is available to all API keys (default behavior).
-	APIKeys []string `yaml:"api-keys,omitempty" json:"api-keys,omitempty"`
 }
 
 // KiroFingerprintConfig defines a global fingerprint configuration for Kiro requests.

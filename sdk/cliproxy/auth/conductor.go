@@ -1525,19 +1525,30 @@ func isAuthAllowedForAPIKey(auth *Auth, clientAPIKey string) bool {
 	if auth == nil || auth.Attributes == nil {
 		return true
 	}
-	allowed := strings.TrimSpace(auth.Attributes["allowed_api_keys"])
-	if allowed == "" {
-		return true
-	}
-	if clientAPIKey == "" {
+	// Whitelist: only listed keys may use this credential.
+	if allowed := strings.TrimSpace(auth.Attributes["allowed_api_keys"]); allowed != "" {
+		if clientAPIKey == "" {
+			return false
+		}
+		for _, key := range strings.Split(allowed, ",") {
+			if strings.TrimSpace(key) == clientAPIKey {
+				return true
+			}
+		}
 		return false
 	}
-	for _, key := range strings.Split(allowed, ",") {
-		if strings.TrimSpace(key) == clientAPIKey {
+	// Blacklist: listed keys are denied access to this credential.
+	if denied := strings.TrimSpace(auth.Attributes["denied_api_keys"]); denied != "" {
+		if clientAPIKey == "" {
 			return true
 		}
+		for _, key := range strings.Split(denied, ",") {
+			if strings.TrimSpace(key) == clientAPIKey {
+				return false
+			}
+		}
 	}
-	return false
+	return true
 }
 
 func pinnedAuthIDFromMetadata(meta map[string]any) string {
