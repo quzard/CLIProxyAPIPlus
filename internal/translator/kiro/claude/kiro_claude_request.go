@@ -143,6 +143,8 @@ func ConvertClaudeRequestToKiro(modelName string, inputRawJSON []byte, stream bo
 // isAgentic parameter enables chunked write optimization prompt for -agentic model variants.
 // isChatOnly parameter disables tool calling for -chat model variants (pure conversation mode).
 // headers parameter allows checking Anthropic-Beta header for thinking mode detection.
+// metadata optionally carries auth-derived Kiro thinking defaults such as force_thinking
+// and thinking_budget.
 // Supports thinking mode - when enabled, injects thinking tags into system prompt.
 // Returns the payload and a boolean indicating whether thinking mode was injected.
 func BuildKiroPayload(claudeBody []byte, modelID, profileArn, origin string, isAgentic, isChatOnly bool, headers http.Header, metadata map[string]any) ([]byte, bool) {
