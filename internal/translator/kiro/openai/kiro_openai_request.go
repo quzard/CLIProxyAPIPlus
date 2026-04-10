@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -138,7 +139,6 @@ func ConvertOpenAIRequestToKiro(modelName string, inputRawJSON []byte, stream bo
 // isAgentic parameter enables chunked write optimization prompt for -agentic model variants.
 // isChatOnly parameter disables tool calling for -chat model variants (pure conversation mode).
 // headers parameter allows checking Anthropic-Beta header for thinking mode detection.
-// metadata parameter is kept for API compatibility but no longer used for thinking configuration.
 // Returns the payload and a boolean indicating whether thinking mode was injected.
 func BuildKiroPayloadFromOpenAI(openaiBody []byte, modelID, profileArn, origin string, isAgentic, isChatOnly bool, headers http.Header, metadata map[string]any) ([]byte, bool) {
 	// Extract max_tokens for potential use in inferenceConfig
@@ -228,6 +228,15 @@ func BuildKiroPayloadFromOpenAI(openaiBody []byte, modelID, profileArn, origin s
 	// Check for thinking mode
 	// Supports OpenAI reasoning_effort parameter, model name hints, and Anthropic-Beta header
 	thinkingEnabled := checkThinkingModeFromOpenAIWithHeaders(openaiBody, headers)
+	thinkingConfig := kirocommon.ParseThinkingConfigMetadata(metadata)
+	if thinkingConfig.ForceEnabled && !thinkingEnabled {
+		thinkingEnabled = true
+		log.Debugf("kiro-openai: thinking mode forced on via config metadata")
+	}
+	thinkingBudget := kirocommon.DefaultThinkingBudget
+	if thinkingConfig.Budget > 0 {
+		thinkingBudget = thinkingConfig.Budget
+	}
 
 	// Convert OpenAI tools to Kiro format
 	kiroTools := convertOpenAIToolsToKiro(tools)
@@ -237,15 +246,17 @@ func BuildKiroPayloadFromOpenAI(openaiBody []byte, modelID, profileArn, origin s
 	// When set to "enabled", Kiro returns reasoning content as official reasoningContentEvent
 	// rather than inline <thinking> tags in assistantResponseEvent.
 	// Use a conservative thinking budget to reduce latency/cost spikes in long sessions.
-	if thinkingEnabled {
+	if thinkingEnabled && !hasThinkingTagInBody(openaiBody) {
 		thinkingHint := `<thinking_mode>enabled</thinking_mode>
-<max_thinking_length>16000</max_thinking_length>`
+<max_thinking_length>` + strconv.Itoa(thinkingBudget) + `</max_thinking_length>`
 		if systemPrompt != "" {
 			systemPrompt = thinkingHint + "\n\n" + systemPrompt
 		} else {
 			systemPrompt = thinkingHint
 		}
-		log.Infof("kiro-openai: injected thinking prompt (official mode), has_tools: %v", len(kiroTools) > 0)
+		log.Infof("kiro-openai: injected thinking prompt (official mode), budget=%d, has_tools: %v", thinkingBudget, len(kiroTools) > 0)
+	} else if thinkingEnabled {
+		log.Debugf("kiro-openai: reusing existing thinking tags from request body")
 	}
 
 	// Process messages and build history

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -142,7 +143,6 @@ func ConvertClaudeRequestToKiro(modelName string, inputRawJSON []byte, stream bo
 // isAgentic parameter enables chunked write optimization prompt for -agentic model variants.
 // isChatOnly parameter disables tool calling for -chat model variants (pure conversation mode).
 // headers parameter allows checking Anthropic-Beta header for thinking mode detection.
-// metadata parameter is kept for API compatibility but no longer used for thinking configuration.
 // Supports thinking mode - when enabled, injects thinking tags into system prompt.
 // Returns the payload and a boolean indicating whether thinking mode was injected.
 func BuildKiroPayload(claudeBody []byte, modelID, profileArn, origin string, isAgentic, isChatOnly bool, headers http.Header, metadata map[string]any) ([]byte, bool) {
@@ -193,6 +193,15 @@ func BuildKiroPayload(claudeBody []byte, modelID, profileArn, origin string, isA
 	// Check for thinking mode using the comprehensive IsThinkingEnabledWithHeaders function
 	// This supports Claude API format, OpenAI reasoning_effort, AMP/Cursor format, and Anthropic-Beta header
 	thinkingEnabled := IsThinkingEnabledWithHeaders(claudeBody, headers)
+	thinkingConfig := kirocommon.ParseThinkingConfigMetadata(metadata)
+	if thinkingConfig.ForceEnabled && !thinkingEnabled {
+		thinkingEnabled = true
+		log.Debugf("kiro: thinking mode forced on via config metadata")
+	}
+	thinkingBudget := kirocommon.DefaultThinkingBudget
+	if thinkingConfig.Budget > 0 {
+		thinkingBudget = thinkingConfig.Budget
+	}
 
 	// Inject timestamp context
 	timestamp := time.Now().Format("2006-01-02 15:04:05 MST")
@@ -231,15 +240,17 @@ func BuildKiroPayload(claudeBody []byte, modelID, profileArn, origin string, isA
 	// When set to "enabled", Kiro returns reasoning content as official reasoningContentEvent
 	// rather than inline <thinking> tags in assistantResponseEvent.
 	// We cap max_thinking_length to reserve space for tool outputs and prevent truncation.
-	if thinkingEnabled {
+	if thinkingEnabled && !hasThinkingTagInBody(claudeBody) {
 		thinkingHint := `<thinking_mode>enabled</thinking_mode>
-<max_thinking_length>16000</max_thinking_length>`
+<max_thinking_length>` + strconv.Itoa(thinkingBudget) + `</max_thinking_length>`
 		if systemPrompt != "" {
 			systemPrompt = thinkingHint + "\n\n" + systemPrompt
 		} else {
 			systemPrompt = thinkingHint
 		}
-		log.Infof("kiro: injected thinking prompt (official mode), has_tools: %v", len(kiroTools) > 0)
+		log.Infof("kiro: injected thinking prompt (official mode), budget=%d, has_tools: %v", thinkingBudget, len(kiroTools) > 0)
+	} else if thinkingEnabled {
+		log.Debugf("kiro: reusing existing thinking tags from request body")
 	}
 
 	// Process messages and build history

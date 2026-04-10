@@ -234,6 +234,8 @@ nonstream-keepalive-interval: 0
 #    agent-task-type: "" # optional: "vibe" or empty (API default)
 #    start-url: "https://your-company.awsapps.com/start" # optional: IDC start URL (preset for login)
 #    region: "us-east-1" # optional: OIDC region for IDC login and token refresh
+#    thinking-budget: 24000 # optional: default Kiro <max_thinking_length>, max 32000
+#    force-thinking: true # optional: force-enable thinking even when the client does not request it
 #  - access-token: "aoaAAAAA..." # or provide tokens directly
 #    refresh-token: "aorAAAAA..."
 #    profile-arn: "arn:aws:codewhisperer:us-east-1:..."

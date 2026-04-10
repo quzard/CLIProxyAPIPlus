@@ -572,6 +572,13 @@ type KiroKey struct {
 	// PreferredEndpoint sets the preferred Kiro API endpoint/quota.
 	// Values: "codewhisperer" (default, IDE quota) or "amazonq" (CLI quota).
 	PreferredEndpoint string `yaml:"preferred-endpoint,omitempty" json:"preferred-endpoint,omitempty"`
+
+	// ThinkingBudget sets the default max_thinking_length value injected for Kiro thinking mode.
+	// Values less than or equal to 0 fall back to the built-in default.
+	ThinkingBudget int `yaml:"thinking-budget,omitempty" json:"thinking-budget,omitempty"`
+
+	// ForceThinking forces Kiro thinking mode on by default even when the client request does not enable it.
+	ForceThinking *bool `yaml:"force-thinking,omitempty" json:"force-thinking,omitempty"`
 }
 
 // KiroFingerprintConfig defines a global fingerprint configuration for Kiro requests.
