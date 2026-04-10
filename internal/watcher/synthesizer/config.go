@@ -391,6 +391,12 @@ func (s *ConfigSynthesizer) synthesizeKiroKeys(ctx *SynthesisContext) []*coreaut
 			// Apply global default if not overridden by specific key
 			attrs["preferred_endpoint"] = cfg.KiroPreferredEndpoint
 		}
+		if kk.ThinkingBudget > 0 {
+			attrs["thinking_budget"] = strconv.Itoa(kk.ThinkingBudget)
+		}
+		if kk.ForceThinking != nil {
+			attrs["force_thinking"] = strconv.FormatBool(*kk.ForceThinking)
+		}
 		if refreshToken != "" {
 			attrs["refresh_token"] = refreshToken
 		}
