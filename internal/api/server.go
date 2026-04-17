@@ -24,8 +24,8 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/api/middleware"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/api/modules"
 	ampmodule "github.com/router-for-me/CLIProxyAPI/v6/internal/api/modules/amp"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/auth/kiro"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/managementasset"
@@ -437,20 +437,6 @@ func (s *Server) setupRoutes() {
 		c.String(http.StatusOK, oauthCallbackSuccessHTML)
 	})
 
-	s.engine.GET("/iflow/callback", func(c *gin.Context) {
-		code := c.Query("code")
-		state := c.Query("state")
-		errStr := c.Query("error")
-		if errStr == "" {
-			errStr = c.Query("error_description")
-		}
-		if state != "" {
-			_, _ = managementHandlers.WriteOAuthCallbackFileForPendingSession(s.cfg.AuthDir, "iflow", state, code, errStr)
-		}
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		c.String(http.StatusOK, oauthCallbackSuccessHTML)
-	})
-
 	s.engine.GET("/antigravity/callback", func(c *gin.Context) {
 		code := c.Query("code")
 		state := c.Query("state")
@@ -686,19 +672,18 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/gitlab-auth-url", s.mgmt.RequestGitLabToken)
 		mgmt.POST("/gitlab-auth-url", s.mgmt.RequestGitLabPATToken)
 		mgmt.GET("/gemini-cli-auth-url", s.mgmt.RequestGeminiCLIToken)
-		mgmt.GET("/antigravity-auth-url", s.mgmt.RequestAntigravityToken)
-		mgmt.GET("/qwen-auth-url", s.mgmt.RequestQwenToken)
-		mgmt.GET("/kilo-auth-url", s.mgmt.RequestKiloToken)
-		mgmt.GET("/kimi-auth-url", s.mgmt.RequestKimiToken)
-		mgmt.GET("/iflow-auth-url", s.mgmt.RequestIFlowToken)
-		mgmt.POST("/iflow-auth-url", s.mgmt.RequestIFlowCookieToken)
-		mgmt.GET("/kiro-auth-url", s.mgmt.RequestKiroToken)
-		mgmt.GET("/cursor-auth-url", s.mgmt.RequestCursorToken)
-		mgmt.GET("/github-auth-url", s.mgmt.RequestGitHubToken)
-		mgmt.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
-		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+			mgmt.GET("/antigravity-auth-url", s.mgmt.RequestAntigravityToken)
+			mgmt.GET("/kilo-auth-url", s.mgmt.RequestKiloToken)
+			mgmt.GET("/kimi-auth-url", s.mgmt.RequestKimiToken)
+			mgmt.GET("/iflow-auth-url", s.mgmt.RequestIFlowToken)
+			mgmt.POST("/iflow-auth-url", s.mgmt.RequestIFlowCookieToken)
+			mgmt.GET("/kiro-auth-url", s.mgmt.RequestKiroToken)
+			mgmt.GET("/cursor-auth-url", s.mgmt.RequestCursorToken)
+			mgmt.GET("/github-auth-url", s.mgmt.RequestGitHubToken)
+			mgmt.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
+			mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+		}
 	}
-}
 
 func (s *Server) managementAvailabilityMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -1125,20 +1110,17 @@ func applySignatureCacheConfig(oldCfg, cfg *config.Config) {
 	if oldCfg == nil {
 		cache.SetSignatureCacheEnabled(newVal)
 		cache.SetSignatureBypassStrictMode(newStrict)
-		log.Debugf("antigravity_signature_cache_enabled toggled to %t", newVal)
 		return
 	}
 
 	oldVal := configuredSignatureCacheEnabled(oldCfg)
 	if oldVal != newVal {
 		cache.SetSignatureCacheEnabled(newVal)
-		log.Debugf("antigravity_signature_cache_enabled updated from %t to %t", oldVal, newVal)
 	}
 
 	oldStrict := configuredSignatureBypassStrict(oldCfg)
 	if oldStrict != newStrict {
 		cache.SetSignatureBypassStrictMode(newStrict)
-		log.Debugf("antigravity_signature_bypass_strict updated from %t to %t", oldStrict, newStrict)
 	}
 }
 
