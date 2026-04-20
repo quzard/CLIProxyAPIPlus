@@ -706,6 +706,18 @@ func GetKiroModels() []*ModelInfo {
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
 		{
+			ID:                  "kiro-claude-opus-4-7",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro Claude Opus 4.7",
+			Description:         "Claude Opus 4.7 via Kiro (2.2x credit)",
+			ContextLength:       1000000,
+			MaxCompletionTokens: 64000,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
 			ID:                  "kiro-claude-opus-4-6",
 			Object:              "model",
 			Created:             1736899200, // 2025-01-15
@@ -725,7 +737,7 @@ func GetKiroModels() []*ModelInfo {
 			Type:                "kiro",
 			DisplayName:         "Kiro Claude Sonnet 4.6",
 			Description:         "Claude Sonnet 4.6 via Kiro (1.3x credit)",
-			ContextLength:       200000,
+			ContextLength:       1000000,
 			MaxCompletionTokens: 64000,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
@@ -777,7 +789,7 @@ func GetKiroModels() []*ModelInfo {
 			MaxCompletionTokens: 64000,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
-		// --- 第三方模型 (通过 Kiro 接入) ---
+		// --- Third-party models (accessed via Kiro) ---
 		{
 			ID:                  "kiro-deepseek-3-2",
 			Object:              "model",
@@ -785,9 +797,33 @@ func GetKiroModels() []*ModelInfo {
 			OwnedBy:             "aws",
 			Type:                "kiro",
 			DisplayName:         "Kiro DeepSeek 3.2",
-			Description:         "DeepSeek 3.2 via Kiro",
+			Description:         "DeepSeek 3.2 via Kiro (0.25x credit)",
 			ContextLength:       128000,
 			MaxCompletionTokens: 32768,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
+			ID:                  "kiro-minimax-m2-5",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro MiniMax M2.5",
+			Description:         "MiniMax M2.5 via Kiro (0.25x credit)",
+			ContextLength:       200000,
+			MaxCompletionTokens: 64000,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
+			ID:                  "kiro-glm-5",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro GLM-5",
+			Description:         "GLM-5 via Kiro (0.5x credit)",
+			ContextLength:       200000,
+			MaxCompletionTokens: 64000,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
 		{
@@ -797,7 +833,7 @@ func GetKiroModels() []*ModelInfo {
 			OwnedBy:             "aws",
 			Type:                "kiro",
 			DisplayName:         "Kiro MiniMax M2.1",
-			Description:         "MiniMax M2.1 via Kiro",
+			Description:         "MiniMax M2.1 via Kiro (0.15x credit)",
 			ContextLength:       200000,
 			MaxCompletionTokens: 64000,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
@@ -809,8 +845,8 @@ func GetKiroModels() []*ModelInfo {
 			OwnedBy:             "aws",
 			Type:                "kiro",
 			DisplayName:         "Kiro Qwen3 Coder Next",
-			Description:         "Qwen3 Coder Next via Kiro",
-			ContextLength:       128000,
+			Description:         "Qwen3 Coder Next via Kiro (0.05x credit)",
+			ContextLength:       256000,
 			MaxCompletionTokens: 32768,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
@@ -860,6 +896,18 @@ func GetKiroModels() []*ModelInfo {
 		},
 		// --- Agentic Variants (Optimized for coding agents with chunked writes) ---
 		{
+			ID:                  "kiro-claude-opus-4-7-agentic",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro Claude Opus 4.7 (Agentic)",
+			Description:         "Claude Opus 4.7 optimized for coding agents (chunked writes)",
+			ContextLength:       1000000,
+			MaxCompletionTokens: 64000,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
 			ID:                  "kiro-claude-opus-4-6-agentic",
 			Object:              "model",
 			Created:             1736899200, // 2025-01-15
@@ -879,7 +927,7 @@ func GetKiroModels() []*ModelInfo {
 			Type:                "kiro",
 			DisplayName:         "Kiro Claude Sonnet 4.6 (Agentic)",
 			Description:         "Claude Sonnet 4.6 optimized for coding agents (chunked writes)",
-			ContextLength:       200000,
+			ContextLength:       1000000,
 			MaxCompletionTokens: 64000,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
@@ -944,6 +992,30 @@ func GetKiroModels() []*ModelInfo {
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
 		{
+			ID:                  "kiro-minimax-m2-5-agentic",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro MiniMax M2.5 (Agentic)",
+			Description:         "MiniMax M2.5 optimized for coding agents (chunked writes)",
+			ContextLength:       200000,
+			MaxCompletionTokens: 64000,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
+			ID:                  "kiro-glm-5-agentic",
+			Object:              "model",
+			Created:             1745107200, // 2025-04-20
+			OwnedBy:             "aws",
+			Type:                "kiro",
+			DisplayName:         "Kiro GLM-5 (Agentic)",
+			Description:         "GLM-5 optimized for coding agents (chunked writes)",
+			ContextLength:       200000,
+			MaxCompletionTokens: 64000,
+			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
+		},
+		{
 			ID:                  "kiro-minimax-m2-1-agentic",
 			Object:              "model",
 			Created:             1732752000,
@@ -963,7 +1035,7 @@ func GetKiroModels() []*ModelInfo {
 			Type:                "kiro",
 			DisplayName:         "Kiro Qwen3 Coder Next (Agentic)",
 			Description:         "Qwen3 Coder Next optimized for coding agents (chunked writes)",
-			ContextLength:       128000,
+			ContextLength:       256000,
 			MaxCompletionTokens: 32768,
 			Thinking:            &ThinkingSupport{Min: 1024, Max: 32000, ZeroAllowed: true, DynamicAllowed: true},
 		},
