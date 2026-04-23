@@ -1037,7 +1037,6 @@ func buildGitLabAnthropicGatewayAuth(auth *cliproxyauth.Auth, requestedModel str
 	}
 	nativeAuth.Attributes["api_key"] = token
 	nativeAuth.Attributes["base_url"] = baseURL
-	nativeAuth.Attributes["gitlab_duo_force_context_1m"] = "true"
 	for key, value := range gitLabGatewayHeaders(auth, "anthropic") {
 		if key == "" || value == "" {
 			continue
