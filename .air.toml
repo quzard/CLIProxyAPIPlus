@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/cliproxy-dev ./cmd/server"
+bin = "./tmp/cliproxy-dev"
+full_bin = "MANAGEMENT_PASSWORD=devpass ./tmp/cliproxy-dev -config ./config.yaml -local-model"
+include_ext = ["go", "yaml"]
+exclude_dir = ["tmp", "logs", "auths", ".git"]
+send_interrupt = true
+kill_delay = "500ms"
+
+[log]
+time = true
