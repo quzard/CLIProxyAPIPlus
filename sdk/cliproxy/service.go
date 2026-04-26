@@ -17,7 +17,7 @@ import (
 	_ "github.com/router-for-me/CLIProxyAPI/v6/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor"
-	_ "github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
+	internalusage "github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/watcher"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/wsrelay"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v6/sdk/access"
@@ -505,6 +505,13 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 
 	usage.StartDefault(ctx)
+	usagePersistencePath := internalusage.ResolveStatisticsPersistencePath(
+		s.configPath,
+		s.cfg.UsageStatisticsStoragePath,
+		s.cfg.UsageStatisticsEnabled,
+	)
+	stopUsagePersistence := internalusage.StartStatisticsPersistence(ctx, usagePersistencePath, 30*time.Second)
+	defer stopUsagePersistence()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()

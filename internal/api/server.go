@@ -548,6 +548,7 @@ func (s *Server) registerManagementRoutes() {
 	mgmt.Use(s.managementAvailabilityMiddleware(), s.mgmt.Middleware())
 	{
 		mgmt.GET("/usage", s.mgmt.GetUsageStatistics)
+		mgmt.POST("/usage/period-summary", s.mgmt.PostUsagePeriodSummary)
 		mgmt.GET("/usage-model-prices", s.mgmt.GetUsageModelPrices)
 		mgmt.PUT("/usage-model-prices", s.mgmt.PutUsageModelPrices)
 		mgmt.PATCH("/usage-model-prices", s.mgmt.PutUsageModelPrices)
