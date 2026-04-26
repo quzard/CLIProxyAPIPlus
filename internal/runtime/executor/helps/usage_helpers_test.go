@@ -127,3 +127,25 @@ func TestUsageReporterBuildRecordIncludesThinkingEffortFromContext(t *testing.T)
 		t.Fatalf("thinking effort = %q, want %q", record.ThinkingEffort, "high")
 	}
 }
+
+func TestUsageReporterBuildRecordIncludesServiceTierFromContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	ginCtx, _ := gin.CreateTestContext(recorder)
+	ginCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ginCtx.Set(usageServiceTierKey, "Priority")
+
+	ctx := context.WithValue(context.Background(), "gin", ginCtx)
+
+	reporter := &UsageReporter{
+		provider: "openai",
+		model:    "gpt-5.5",
+	}
+	reporter.captureServiceTier(ctx)
+
+	record := reporter.buildRecord(usage.Detail{TotalTokens: 3}, false)
+	if record.ServiceTier != "priority" {
+		t.Fatalf("service tier = %q, want %q", record.ServiceTier, "priority")
+	}
+}

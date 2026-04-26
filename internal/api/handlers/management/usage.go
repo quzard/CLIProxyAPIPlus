@@ -40,27 +40,50 @@ func sanitizeUsageModelPrices(input map[string]config.UsageModelPrice) map[strin
 			continue
 		}
 
+		tier := sanitizeUsageModelPriceTier(config.UsageModelPriceTier{
+			Prompt:        price.Prompt,
+			Completion:    price.Completion,
+			Cache:         price.Cache,
+			CacheRead:     price.CacheRead,
+			CacheCreation: price.CacheCreation,
+		})
 		sanitized := config.UsageModelPrice{
-			Prompt:        clampNonNegativeFloat(price.Prompt),
-			Completion:    clampNonNegativeFloat(price.Completion),
-			Cache:         clampNonNegativeFloat(price.Cache),
-			CacheRead:     clampNonNegativeFloat(price.CacheRead),
-			CacheCreation: clampNonNegativeFloat(price.CacheCreation),
+			Prompt:        tier.Prompt,
+			Completion:    tier.Completion,
+			Cache:         tier.Cache,
+			CacheRead:     tier.CacheRead,
+			CacheCreation: tier.CacheCreation,
 		}
-
-		if sanitized.CacheRead == 0 && sanitized.Cache > 0 {
-			sanitized.CacheRead = sanitized.Cache
-		}
-		if sanitized.CacheCreation == 0 && sanitized.CacheRead > 0 {
-			sanitized.CacheCreation = sanitized.CacheRead
-		}
-		if sanitized.Cache == 0 && sanitized.CacheRead > 0 {
-			sanitized.Cache = sanitized.CacheRead
+		if price.Priority != nil {
+			priority := sanitizeUsageModelPriceTier(*price.Priority)
+			sanitized.Priority = &priority
 		}
 
 		out[key] = sanitized
 	}
 	return out
+}
+
+func sanitizeUsageModelPriceTier(price config.UsageModelPriceTier) config.UsageModelPriceTier {
+	sanitized := config.UsageModelPriceTier{
+		Prompt:        clampNonNegativeFloat(price.Prompt),
+		Completion:    clampNonNegativeFloat(price.Completion),
+		Cache:         clampNonNegativeFloat(price.Cache),
+		CacheRead:     clampNonNegativeFloat(price.CacheRead),
+		CacheCreation: clampNonNegativeFloat(price.CacheCreation),
+	}
+
+	if sanitized.CacheRead == 0 && sanitized.Cache > 0 {
+		sanitized.CacheRead = sanitized.Cache
+	}
+	if sanitized.CacheCreation == 0 && sanitized.CacheRead > 0 {
+		sanitized.CacheCreation = sanitized.CacheRead
+	}
+	if sanitized.Cache == 0 && sanitized.CacheRead > 0 {
+		sanitized.Cache = sanitized.CacheRead
+	}
+
+	return sanitized
 }
 
 func sanitizeDisabledDefaultModels(input []string) []string {

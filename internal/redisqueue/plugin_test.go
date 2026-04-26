@@ -22,14 +22,16 @@ func TestUsageQueuePluginPayloadIncludesStableFieldsAndSuccess(t *testing.T) {
 
 		plugin := &usageQueuePlugin{}
 		plugin.HandleUsage(ctx, coreusage.Record{
-			Provider:    "openai",
-			Model:       "gpt-5.4",
-			APIKey:      "test-key",
-			AuthIndex:   "0",
-			AuthType:    "apikey",
-			Source:      "user@example.com",
-			RequestedAt: time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC),
-			Latency:     1500 * time.Millisecond,
+			Provider:       "openai",
+			Model:          "gpt-5.4",
+			APIKey:         "test-key",
+			AuthIndex:      "0",
+			AuthType:       "apikey",
+			Source:         "user@example.com",
+			ThinkingEffort: "high",
+			ServiceTier:    "priority",
+			RequestedAt:    time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC),
+			Latency:        1500 * time.Millisecond,
 			Detail: coreusage.Detail{
 				InputTokens:  10,
 				OutputTokens: 20,
@@ -43,6 +45,8 @@ func TestUsageQueuePluginPayloadIncludesStableFieldsAndSuccess(t *testing.T) {
 		requireStringField(t, payload, "endpoint", "POST /v1/chat/completions")
 		requireStringField(t, payload, "auth_type", "apikey")
 		requireStringField(t, payload, "request_id", "ctx-request-id")
+		requireStringField(t, payload, "thinking_effort", "high")
+		requireStringField(t, payload, "service_tier", "priority")
 		requireBoolField(t, payload, "failed", false)
 	})
 }

@@ -24,6 +24,7 @@ type UsageReporter struct {
 	apiKey         string
 	source         string
 	thinkingEffort string
+	serviceTier    string
 	requestedAt    time.Time
 	once           sync.Once
 }
@@ -67,6 +68,7 @@ func (r *UsageReporter) publishWithOutcome(ctx context.Context, detail usage.Det
 		return
 	}
 	r.captureThinkingEffort(ctx)
+	r.captureServiceTier(ctx)
 	if detail.CachedTokens == 0 {
 		if detail.CacheReadTokens > 0 {
 			detail.CachedTokens = detail.CacheReadTokens
@@ -94,6 +96,7 @@ func (r *UsageReporter) EnsurePublished(ctx context.Context) {
 		return
 	}
 	r.captureThinkingEffort(ctx)
+	r.captureServiceTier(ctx)
 	r.once.Do(func() {
 		usage.PublishRecord(ctx, r.buildRecord(usage.Detail{}, false))
 	})
@@ -112,6 +115,7 @@ func (r *UsageReporter) buildRecord(detail usage.Detail, failed bool) usage.Reco
 		AuthIndex:      r.authIndex,
 		AuthType:       r.authType,
 		ThinkingEffort: r.thinkingEffort,
+		ServiceTier:    r.serviceTier,
 		RequestedAt:    r.requestedAt,
 		Latency:        r.latency(),
 		Failed:         failed,
@@ -124,6 +128,13 @@ func (r *UsageReporter) captureThinkingEffort(ctx context.Context) {
 		return
 	}
 	r.thinkingEffort = resolveUsageThinkingEffort(ctx)
+}
+
+func (r *UsageReporter) captureServiceTier(ctx context.Context) {
+	if r == nil || r.serviceTier != "" {
+		return
+	}
+	r.serviceTier = resolveUsageServiceTier(ctx)
 }
 
 func (r *UsageReporter) latency() time.Duration {
@@ -159,6 +170,14 @@ func APIKeyFromContext(ctx context.Context) string {
 }
 
 func resolveUsageThinkingEffort(ctx context.Context) string {
+	return resolveUsageStringContextValue(ctx, usageThinkingEffortKey)
+}
+
+func resolveUsageServiceTier(ctx context.Context) string {
+	return strings.ToLower(resolveUsageStringContextValue(ctx, usageServiceTierKey))
+}
+
+func resolveUsageStringContextValue(ctx context.Context, key string) string {
 	if ctx == nil {
 		return ""
 	}
@@ -166,7 +185,7 @@ func resolveUsageThinkingEffort(ctx context.Context) string {
 	if !ok || ginCtx == nil {
 		return ""
 	}
-	value, exists := ginCtx.Get(usageThinkingEffortKey)
+	value, exists := ginCtx.Get(key)
 	if !exists {
 		return ""
 	}

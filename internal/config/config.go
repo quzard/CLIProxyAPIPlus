@@ -191,6 +191,16 @@ type APIKeyBinding struct {
 
 // UsageModelPrice represents per-model display pricing for the usage dashboard.
 type UsageModelPrice struct {
+	Prompt        float64              `yaml:"prompt" json:"prompt"`
+	Completion    float64              `yaml:"completion" json:"completion"`
+	Cache         float64              `yaml:"cache,omitempty" json:"cache,omitempty"`
+	CacheRead     float64              `yaml:"cache-read,omitempty" json:"cacheRead,omitempty"`
+	CacheCreation float64              `yaml:"cache-creation,omitempty" json:"cacheCreation,omitempty"`
+	Priority      *UsageModelPriceTier `yaml:"priority,omitempty" json:"priority,omitempty"`
+}
+
+// UsageModelPriceTier represents alternate service-tier pricing for a model.
+type UsageModelPriceTier struct {
 	Prompt        float64 `yaml:"prompt" json:"prompt"`
 	Completion    float64 `yaml:"completion" json:"completion"`
 	Cache         float64 `yaml:"cache,omitempty" json:"cache,omitempty"`

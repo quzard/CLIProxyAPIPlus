@@ -72,12 +72,14 @@ func (p *usageQueuePlugin) HandleUsage(ctx context.Context, record coreusage.Rec
 	}
 
 	detail := internalusage.RequestDetail{
-		Timestamp: timestamp,
-		LatencyMs: record.Latency.Milliseconds(),
-		Source:    record.Source,
-		AuthIndex: record.AuthIndex,
-		Tokens:    tokens,
-		Failed:    failed,
+		Timestamp:      timestamp,
+		LatencyMs:      record.Latency.Milliseconds(),
+		Source:         record.Source,
+		AuthIndex:      record.AuthIndex,
+		ThinkingEffort: record.ThinkingEffort,
+		ServiceTier:    record.ServiceTier,
+		Tokens:         tokens,
+		Failed:         failed,
 	}
 
 	payload, err := json.Marshal(queuedUsageDetail{

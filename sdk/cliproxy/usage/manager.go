@@ -18,6 +18,7 @@ type Record struct {
 	AuthType       string
 	Source         string
 	ThinkingEffort string
+	ServiceTier    string
 	RequestedAt    time.Time
 	Latency        time.Duration
 	Failed         bool

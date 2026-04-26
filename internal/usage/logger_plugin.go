@@ -99,6 +99,7 @@ type RequestDetail struct {
 	Source         string     `json:"source"`
 	AuthIndex      string     `json:"auth_index"`
 	ThinkingEffort string     `json:"thinking_effort,omitempty"`
+	ServiceTier    string     `json:"service_tier,omitempty"`
 	Tokens         TokenStats `json:"tokens"`
 	Failed         bool       `json:"failed"`
 }
@@ -219,6 +220,7 @@ func (s *RequestStatistics) Record(ctx context.Context, record coreusage.Record)
 		Source:         record.Source,
 		AuthIndex:      record.AuthIndex,
 		ThinkingEffort: normaliseThinkingEffort(record.ThinkingEffort),
+		ServiceTier:    normaliseServiceTier(record.ServiceTier),
 		Tokens:         detail,
 		Failed:         failed,
 	})
@@ -402,7 +404,7 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 	timestamp := detail.Timestamp.UTC().Format(time.RFC3339Nano)
 	tokens := normaliseTokenStats(detail.Tokens)
 	return fmt.Sprintf(
-		"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
+		"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%d|%d|%d|%d|%d",
 		apiName,
 		modelName,
 		timestamp,
@@ -413,6 +415,7 @@ func dedupKey(apiName, modelName string, detail RequestDetail) string {
 		detail.Source,
 		detail.AuthIndex,
 		detail.ThinkingEffort,
+		detail.ServiceTier,
 		detail.Failed,
 		tokens.InputTokens,
 		tokens.OutputTokens,
@@ -545,6 +548,7 @@ func normaliseRequestDetail(detail RequestDetail) RequestDetail {
 	detail.Path = strings.TrimSpace(detail.Path)
 	detail.Endpoint = strings.TrimSpace(detail.Endpoint)
 	detail.ThinkingEffort = normaliseThinkingEffort(detail.ThinkingEffort)
+	detail.ServiceTier = normaliseServiceTier(detail.ServiceTier)
 	if detail.Endpoint == "" {
 		if detail.Method != "" && detail.Path != "" {
 			detail.Endpoint = detail.Method + " " + detail.Path
@@ -556,6 +560,10 @@ func normaliseRequestDetail(detail RequestDetail) RequestDetail {
 }
 
 func normaliseThinkingEffort(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normaliseServiceTier(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 

@@ -62,7 +62,12 @@ func TestPutUsageModelPrices_PersistsSanitizedPayload(t *testing.T) {
 	    "gpt-5.4": {
 	      "prompt": -1,
 	      "completion": 15,
-	      "cache": 0.25
+	      "cache": 0.25,
+	      "priority": {
+	        "prompt": 5,
+	        "completion": 30,
+	        "cache": 0.5
+	      }
 	    }
 	  },
 	  "disabledDefaultModels": ["claude-3-opus", " claude-3-opus ", "gpt-5.1"]
@@ -98,6 +103,12 @@ func TestPutUsageModelPrices_PersistsSanitizedPayload(t *testing.T) {
 	if gpt.Prompt != 0 || gpt.CacheRead != 0.25 || gpt.CacheCreation != 0.25 {
 		t.Fatalf("unexpected gpt-5.4 price after sanitization: %+v", gpt)
 	}
+	if gpt.Priority == nil {
+		t.Fatalf("expected gpt-5.4 priority price")
+	}
+	if gpt.Priority.Prompt != 5 || gpt.Priority.Completion != 30 || gpt.Priority.CacheRead != 0.5 || gpt.Priority.CacheCreation != 0.5 {
+		t.Fatalf("unexpected gpt-5.4 priority price after sanitization: %+v", gpt.Priority)
+	}
 	if len(handler.cfg.UsageDisabledDefaultModels) != 2 {
 		t.Fatalf("unexpected disabled defaults after sanitization: %+v", handler.cfg.UsageDisabledDefaultModels)
 	}
@@ -112,5 +123,8 @@ func TestPutUsageModelPrices_PersistsSanitizedPayload(t *testing.T) {
 	}
 	if !strings.Contains(content, "claude-sonnet-4:") {
 		t.Fatalf("expected normalized model key persisted, got %s", content)
+	}
+	if !strings.Contains(content, "priority:") {
+		t.Fatalf("expected priority model price persisted, got %s", content)
 	}
 }

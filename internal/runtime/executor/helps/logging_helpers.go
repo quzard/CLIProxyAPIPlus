@@ -25,6 +25,7 @@ const (
 	apiResponseKey          = "API_RESPONSE"
 	apiWebsocketTimelineKey = "API_WEBSOCKET_TIMELINE"
 	usageThinkingEffortKey  = "USAGE_THINKING_EFFORT"
+	usageServiceTierKey     = "USAGE_SERVICE_TIER"
 	creditsUsedKey          = "__antigravity_credits_used__"
 )
 
@@ -61,6 +62,7 @@ func RecordAPIRequest(ctx context.Context, cfg *config.Config, info UpstreamRequ
 		return
 	}
 	ginCtx.Set(usageThinkingEffortKey, extractThinkingEffort(info.Body))
+	ginCtx.Set(usageServiceTierKey, extractServiceTier(info.Body))
 
 	if cfg == nil || !cfg.RequestLog {
 		return
@@ -463,6 +465,14 @@ func extractThinkingEffort(body []byte) string {
 	}
 
 	return ""
+}
+
+func extractServiceTier(body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(firstJSONString(body, "service_tier", "request.service_tier")))
 }
 
 func firstJSONString(body []byte, paths ...string) string {
