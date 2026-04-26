@@ -14,6 +14,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/api"
 	kiroauth "github.com/router-for-me/CLIProxyAPI/v6/internal/auth/kiro"
+	_ "github.com/router-for-me/CLIProxyAPI/v6/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor"
 	_ "github.com/router-for-me/CLIProxyAPI/v6/internal/usage"
@@ -723,9 +724,9 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 	watcherWrapper.SetConfig(s.cfg)
 
-	// 方案 A: 连接 Kiro 后台刷新器回调到 Watcher
-	// 当后台刷新器成功刷新 token 后，立即通知 Watcher 更新内存中的 Auth 对象
-	// 这解决了后台刷新与内存 Auth 对象之间的时间差问题
+	// Wire the Kiro background refresh callback into the watcher.
+	// When the refresh manager updates a token, notify the watcher immediately
+	// so the in-memory Auth object stays in sync.
 	kiroauth.GetRefreshManager().SetOnTokenRefreshed(func(tokenID string, tokenData *kiroauth.KiroTokenData) {
 		if tokenData == nil || watcherWrapper == nil {
 			return
