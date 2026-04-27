@@ -33,6 +33,8 @@ const (
 	codexUserAgent             = "codex-tui/0.118.0 (Mac OS 26.3.1; arm64) iTerm.app/3.6.9 (codex-tui; 0.118.0)"
 	codexOriginator            = "codex-tui"
 	codexDefaultImageToolModel = "gpt-image-2"
+	codexDefaultImageFormat    = "png"
+	codexImageGenerationTool   = "image_generation"
 )
 
 var dataTag = []byte("data:")
@@ -181,7 +183,7 @@ func (e *CodexExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, re
 	body, _ = sjson.DeleteBytes(body, "safety_identifier")
 	body, _ = sjson.DeleteBytes(body, "stream_options")
 	body = normalizeCodexInstructions(body)
-	body = ensureImageGenerationToolModel(body, baseModel, auth)
+	body = ensureImageGenerationTool(body, baseModel, auth)
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses"
 	httpReq, err := e.cacheHelper(ctx, from, url, req, body)
@@ -329,7 +331,7 @@ func (e *CodexExecutor) executeCompact(ctx context.Context, auth *cliproxyauth.A
 	body, _ = sjson.SetBytes(body, "model", baseModel)
 	body, _ = sjson.DeleteBytes(body, "stream")
 	body = normalizeCodexInstructions(body)
-	body = ensureImageGenerationToolModel(body, baseModel, auth)
+	body = ensureImageGenerationTool(body, baseModel, auth)
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses/compact"
 	httpReq, err := e.cacheHelper(ctx, from, url, req, body)
@@ -424,7 +426,7 @@ func (e *CodexExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Au
 	body, _ = sjson.DeleteBytes(body, "stream_options")
 	body, _ = sjson.SetBytes(body, "model", baseModel)
 	body = normalizeCodexInstructions(body)
-	body = ensureImageGenerationToolModel(body, baseModel, auth)
+	body = ensureImageGenerationTool(body, baseModel, auth)
 
 	url := strings.TrimSuffix(baseURL, "/") + "/responses"
 	httpReq, err := e.cacheHelper(ctx, from, url, req, body)
@@ -884,7 +886,10 @@ func isCodexFreePlanAuth(auth *cliproxyauth.Auth) bool {
 	return strings.EqualFold(strings.TrimSpace(auth.Attributes["plan_type"]), "free")
 }
 
-func ensureImageGenerationToolModel(body []byte, baseModel string, auth *cliproxyauth.Auth) []byte {
+func ensureImageGenerationTool(body []byte, baseModel string, auth *cliproxyauth.Auth) []byte {
+	if !requestsImageGenerationTool(body) {
+		return body
+	}
 	if strings.HasSuffix(baseModel, "spark") {
 		return body
 	}
@@ -894,18 +899,76 @@ func ensureImageGenerationToolModel(body []byte, baseModel string, auth *cliprox
 
 	tools := gjson.GetBytes(body, "tools")
 	if !tools.Exists() || !tools.IsArray() {
+		body, _ = sjson.SetRawBytes(body, "tools", defaultImageGenerationToolArrayJSON())
 		return body
 	}
-	for index, t := range tools.Array() {
-		if t.Get("type").String() == "image_generation" {
-			if strings.TrimSpace(t.Get("model").String()) == "" {
-				path := fmt.Sprintf("tools.%d.model", index)
-				body, _ = sjson.SetBytes(body, path, codexDefaultImageToolModel)
-			}
-			return body
+	if index, ok := imageGenerationToolIndex(tools); ok {
+		body = ensureImageGenerationToolModel(body, index)
+		return body
+	}
+	body, _ = sjson.SetRawBytes(body, "tools.-1", defaultImageGenerationToolJSON())
+	return body
+}
+
+func requestsImageGenerationTool(body []byte) bool {
+	if hasImageGenerationTool(gjson.GetBytes(body, "tools")) {
+		return true
+	}
+
+	toolChoice := gjson.GetBytes(body, "tool_choice")
+	if !toolChoice.Exists() {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(toolChoice.String()), codexImageGenerationTool) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(toolChoice.Get("type").String()), codexImageGenerationTool) {
+		return true
+	}
+	return hasImageGenerationTool(toolChoice.Get("tools"))
+}
+
+func hasImageGenerationTool(tools gjson.Result) bool {
+	_, ok := imageGenerationToolIndex(tools)
+	return ok
+}
+
+func imageGenerationToolIndex(tools gjson.Result) (int, bool) {
+	if !tools.IsArray() {
+		return 0, false
+	}
+	for index, tool := range tools.Array() {
+		if strings.EqualFold(strings.TrimSpace(tool.Get("type").String()), codexImageGenerationTool) {
+			return index, true
 		}
 	}
+	return 0, false
+}
+
+func ensureImageGenerationToolModel(body []byte, index int) []byte {
+	if strings.TrimSpace(gjson.GetBytes(body, fmt.Sprintf("tools.%d.model", index)).String()) != "" {
+		return body
+	}
+	path := fmt.Sprintf("tools.%d.model", index)
+	body, _ = sjson.SetBytes(body, path, codexDefaultImageToolModel)
 	return body
+}
+
+func defaultImageGenerationToolJSON() []byte {
+	tool := []byte(`{}`)
+	tool, _ = sjson.SetBytes(tool, "type", codexImageGenerationTool)
+	tool, _ = sjson.SetBytes(tool, "model", codexDefaultImageToolModel)
+	tool, _ = sjson.SetBytes(tool, "output_format", codexDefaultImageFormat)
+	return tool
+}
+
+func defaultImageGenerationToolArrayJSON() []byte {
+	tool := defaultImageGenerationToolJSON()
+	tools := make([]byte, 0, len(tool)+2)
+	tools = append(tools, '[')
+	tools = append(tools, tool...)
+	tools = append(tools, ']')
+	return tools
 }
 
 func publishCodexImageToolUsage(ctx context.Context, reporter *helps.UsageReporter, body []byte, completedData []byte) {
@@ -921,7 +984,7 @@ func codexImageGenerationToolModel(body []byte) string {
 	tools := gjson.GetBytes(body, "tools")
 	if tools.IsArray() {
 		for _, tool := range tools.Array() {
-			if tool.Get("type").String() != "image_generation" {
+			if !strings.EqualFold(strings.TrimSpace(tool.Get("type").String()), codexImageGenerationTool) {
 				continue
 			}
 			if model := strings.TrimSpace(tool.Get("model").String()); model != "" {
