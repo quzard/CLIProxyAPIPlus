@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
+	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 	"github.com/tidwall/gjson"
 )
 
@@ -121,5 +122,29 @@ func TestEnsureImageGenerationTool_FreeCodexAuthDoesNotInjectTool(t *testing.T) 
 	}
 	if gjson.GetBytes(result, "tools").Exists() {
 		t.Fatalf("expected no tools for free codex auth, got %s", gjson.GetBytes(result, "tools").Raw)
+	}
+}
+
+func TestShouldPublishCodexImageToolUsage_SkipsZeroUsageWithoutImageOutput(t *testing.T) {
+	completed := []byte(`{"type":"response.completed","response":{"tool_usage":{"image_gen":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}}`)
+
+	if shouldPublishCodexImageToolUsage(usage.Detail{}, completed) {
+		t.Fatal("expected zero image_gen usage without image output to be ignored")
+	}
+}
+
+func TestShouldPublishCodexImageToolUsage_PublishesNonZeroUsage(t *testing.T) {
+	completed := []byte(`{"type":"response.completed","response":{"tool_usage":{"image_gen":{"input_tokens":1,"output_tokens":2,"total_tokens":3}},"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}}`)
+
+	if !shouldPublishCodexImageToolUsage(usage.Detail{TotalTokens: 3}, completed) {
+		t.Fatal("expected non-zero image_gen usage to be published")
+	}
+}
+
+func TestShouldPublishCodexImageToolUsage_PublishesImageResultWithZeroUsage(t *testing.T) {
+	completed := []byte(`{"type":"response.completed","response":{"tool_usage":{"image_gen":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},"output":[{"type":"image_generation_call","result":"aGVsbG8="}]}}`)
+
+	if !shouldPublishCodexImageToolUsage(usage.Detail{}, completed) {
+		t.Fatal("expected actual image_generation_call result to be published")
 	}
 }

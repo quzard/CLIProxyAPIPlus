@@ -19,6 +19,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v6/sdk/translator"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -973,11 +974,34 @@ func defaultImageGenerationToolArrayJSON() []byte {
 
 func publishCodexImageToolUsage(ctx context.Context, reporter *helps.UsageReporter, body []byte, completedData []byte) {
 	detail, ok := helps.ParseCodexImageToolUsage(completedData)
-	if !ok {
+	if !ok || !shouldPublishCodexImageToolUsage(detail, completedData) {
 		return
 	}
 	reporter.EnsurePublished(ctx)
 	reporter.PublishAdditionalModel(ctx, codexImageGenerationToolModel(body), detail)
+}
+
+func shouldPublishCodexImageToolUsage(detail usage.Detail, completedData []byte) bool {
+	if detail.InputTokens > 0 || detail.OutputTokens > 0 || detail.ReasoningTokens > 0 || detail.CachedTokens > 0 || detail.CacheReadTokens > 0 || detail.CacheCreationTokens > 0 || detail.TotalTokens > 0 {
+		return true
+	}
+	return codexCompletedHasImageGenerationResult(completedData)
+}
+
+func codexCompletedHasImageGenerationResult(completedData []byte) bool {
+	output := gjson.GetBytes(completedData, "response.output")
+	if !output.IsArray() {
+		return false
+	}
+	for _, item := range output.Array() {
+		if !strings.EqualFold(strings.TrimSpace(item.Get("type").String()), "image_generation_call") {
+			continue
+		}
+		if strings.TrimSpace(item.Get("result").String()) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func codexImageGenerationToolModel(body []byte) string {
